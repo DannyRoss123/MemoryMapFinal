@@ -1,34 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/mongodb';
+import { Router } from 'express';
 import { ObjectId } from 'mongodb';
+import { getDb } from '../services/db.js';
 
-const roles = ['PATIENT', 'CAREGIVER'] as const;
-type Role = (typeof roles)[number];
+const roles = ['PATIENT', 'CAREGIVER'];
 
-type LoginPayload = {
-  name?: string;
-  role?: Role;
-  location?: string;
-  caregiverName?: string;
-};
-
-function escapeRegex(value: string) {
+function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function buildCaseInsensitiveQuery(name: string) {
+function buildCaseInsensitiveQuery(name) {
   return { name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' } };
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as LoginPayload;
-  const name = body.name?.trim();
-  const role = body.role;
-  const location = body.location?.trim();
-  const caregiverName = body.caregiverName?.trim();
+export const loginRouter = Router();
+
+loginRouter.post('/', async (req, res) => {
+  const name = req.body?.name?.trim();
+  const role = req.body?.role;
+  const location = req.body?.location?.trim();
+  const caregiverName = req.body?.caregiverName?.trim();
 
   if (!name || !role || !roles.includes(role) || !location) {
-    return NextResponse.json({ error: 'Invalid name, role, or location' }, { status: 400 });
+    return res.status(400).json({ error: 'Invalid name, role, or location' });
   }
 
   try {
@@ -40,7 +33,14 @@ export async function POST(request: NextRequest) {
       const existingCaregiver = await caregivers.findOne(buildCaseInsensitiveQuery(name));
       const caregiverId =
         existingCaregiver?._id ??
-        (await caregivers.insertOne({ name, location, createdAt: new Date(), updatedAt: new Date() })).insertedId;
+        (
+          await caregivers.insertOne({
+            name,
+            location,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          })
+        ).insertedId;
 
       await users.updateOne(
         { role, caregiverId },
@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
         { upsert: true }
       );
 
-      return NextResponse.json({ userId: caregiverId.toString(), name, role, location });
+      return res.json({ userId: caregiverId.toString(), name, role, location });
     }
 
     const caregiverRecord = caregiverName ? await caregivers.findOne(buildCaseInsensitiveQuery(caregiverName)) : null;
-    const caregiverId = caregiverRecord?._id as ObjectId | undefined;
+    const caregiverId = caregiverRecord?._id;
     const userRecord = await users.findOne({ ...buildCaseInsensitiveQuery(name), role: 'PATIENT' });
 
     const patientId =
@@ -71,7 +71,6 @@ export async function POST(request: NextRequest) {
         })
       ).insertedId;
 
-    // keep pairing info up to date
     await users.updateOne(
       { _id: patientId },
       {
@@ -86,16 +85,16 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    return NextResponse.json({
+    return res.json({
       userId: patientId.toString(),
       name,
       role,
       location,
-      caregiverId: caregiverId?.toString(),
+      caregiverId: caregiverId instanceof ObjectId ? caregiverId.toString() : caregiverId?.toString(),
       caregiverName: caregiverRecord?.name
     });
   } catch (error) {
     console.error('Login error', error);
-    return NextResponse.json({ error: 'Unable to log in' }, { status: 500 });
+    return res.status(500).json({ error: 'Unable to log in' });
   }
-}
+});

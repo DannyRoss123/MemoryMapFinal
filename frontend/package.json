@@ -1,5 +1,5 @@
 {
-  "name": "memorymap",
+  "name": "memorymap-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "mongodb": "^6.3.0",
     "next": "^14.2.33",
     "react": "18.2.0",
     "react-dom": "18.2.0"

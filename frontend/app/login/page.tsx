@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Role, useUser } from '../context/UserContext';
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000').replace(/\/$/, '');
+
 const ROLE_LABELS: Record<Role, string> = {
   PATIENT: 'Patient',
   CAREGIVER: 'Caregiver'
@@ -39,7 +41,7 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

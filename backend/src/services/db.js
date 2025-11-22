@@ -30,5 +30,6 @@ export const Collections = {
   TASKS: 'tasks',
   MEMORIES: 'memories',
   JOURNAL_ENTRIES: 'journalEntries',
-  MOOD_ENTRIES: 'moodEntries'
+  MOOD_ENTRIES: 'moodEntries',
+  CONTACTS: 'contacts'
 };

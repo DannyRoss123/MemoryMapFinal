@@ -9,7 +9,8 @@ export const Collections = {
   TASKS: 'tasks',
   MEMORIES: 'memories',
   JOURNAL_ENTRIES: 'journalEntries',
-  MOOD_ENTRIES: 'moodEntries'
+  MOOD_ENTRIES: 'moodEntries',
+  CONTACTS: 'contacts'
 };
 
 /**
@@ -101,6 +102,23 @@ export const Collections = {
  * - createdAt: Date
  */
 
+/**
+ * Contact Schema
+ * Important contacts for patients
+ *
+ * Fields:
+ * - patientId: ObjectId (required - reference to patient who owns this contact)
+ * - firstName: String (required)
+ * - lastName: String (required)
+ * - middleName: String (optional)
+ * - email: String (optional)
+ * - phoneNumber: String (optional)
+ * - profilePicture: String (optional - URL or path to profile picture)
+ * - relationship: String (required - e.g., "Family", "Friend", "Doctor", "Caregiver")
+ * - createdAt: Date
+ * - updatedAt: Date
+ */
+
 // Validation helpers
 export const UserRoles = {
   PATIENT: 'PATIENT',
@@ -163,5 +181,9 @@ export const indexes = {
   moodEntries: [
     { key: { patientId: 1, date: -1 } },
     { key: { patientId: 1, date: 1 }, unique: true } // One mood entry per patient per day
+  ],
+  contacts: [
+    { key: { patientId: 1, createdAt: -1 } },
+    { key: { patientId: 1, relationship: 1 } }
   ]
 };

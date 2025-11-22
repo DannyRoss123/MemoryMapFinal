@@ -43,25 +43,6 @@ moodRouter.get('/', async (req, res) => {
   }
 });
 
-// GET /api/mood/:id - Get a specific mood entry
-moodRouter.get('/:id', async (req, res) => {
-  try {
-    const db = await getDb();
-    const moodEntries = db.collection(Collections.MOOD_ENTRIES);
-
-    const entry = await moodEntries.findOne({ _id: new ObjectId(req.params.id) });
-
-    if (!entry) {
-      return res.status(404).json({ error: 'Mood entry not found' });
-    }
-
-    res.json(entry);
-  } catch (error) {
-    console.error('Error fetching mood entry:', error);
-    res.status(500).json({ error: 'Failed to fetch mood entry' });
-  }
-});
-
 // GET /api/mood/patient/:patientId/today - Get today's mood entry for a patient
 moodRouter.get('/patient/:patientId/today', async (req, res) => {
   try {
@@ -87,6 +68,75 @@ moodRouter.get('/patient/:patientId/today', async (req, res) => {
   } catch (error) {
     console.error('Error fetching today\'s mood entry:', error);
     res.status(500).json({ error: 'Failed to fetch today\'s mood entry' });
+  }
+});
+
+// GET /api/mood/patient/:patientId/stats - Get mood statistics for a patient
+// Query params: startDate, endDate
+moodRouter.get('/patient/:patientId/stats', async (req, res) => {
+  try {
+    const db = await getDb();
+    const moodEntries = db.collection(Collections.MOOD_ENTRIES);
+
+    const query = { patientId: new ObjectId(req.params.patientId) };
+
+    // Filter by date range
+    if (req.query.startDate || req.query.endDate) {
+      query.date = {};
+      if (req.query.startDate) {
+        query.date.$gte = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        query.date.$lte = new Date(req.query.endDate);
+      }
+    }
+
+    const entries = await moodEntries.find(query).toArray();
+
+    if (entries.length === 0) {
+      return res.json({
+        totalEntries: 0,
+        averageScore: 0,
+        moodDistribution: {}
+      });
+    }
+
+    // Calculate statistics
+    const totalEntries = entries.length;
+    const averageScore = entries.reduce((sum, entry) => sum + entry.moodScore, 0) / totalEntries;
+
+    const moodDistribution = entries.reduce((acc, entry) => {
+      acc[entry.mood] = (acc[entry.mood] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      totalEntries,
+      averageScore: Math.round(averageScore * 100) / 100,
+      moodDistribution
+    });
+  } catch (error) {
+    console.error('Error calculating mood stats:', error);
+    res.status(500).json({ error: 'Failed to calculate mood statistics' });
+  }
+});
+
+// GET /api/mood/:id - Get a specific mood entry
+moodRouter.get('/:id', async (req, res) => {
+  try {
+    const db = await getDb();
+    const moodEntries = db.collection(Collections.MOOD_ENTRIES);
+
+    const entry = await moodEntries.findOne({ _id: new ObjectId(req.params.id) });
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Mood entry not found' });
+    }
+
+    res.json(entry);
+  } catch (error) {
+    console.error('Error fetching mood entry:', error);
+    res.status(500).json({ error: 'Failed to fetch mood entry' });
   }
 });
 
@@ -224,55 +274,5 @@ moodRouter.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting mood entry:', error);
     res.status(500).json({ error: 'Failed to delete mood entry' });
-  }
-});
-
-// GET /api/mood/patient/:patientId/stats - Get mood statistics for a patient
-// Query params: startDate, endDate
-moodRouter.get('/patient/:patientId/stats', async (req, res) => {
-  try {
-    const db = await getDb();
-    const moodEntries = db.collection(Collections.MOOD_ENTRIES);
-
-    const query = { patientId: new ObjectId(req.params.patientId) };
-
-    // Filter by date range
-    if (req.query.startDate || req.query.endDate) {
-      query.date = {};
-      if (req.query.startDate) {
-        query.date.$gte = new Date(req.query.startDate);
-      }
-      if (req.query.endDate) {
-        query.date.$lte = new Date(req.query.endDate);
-      }
-    }
-
-    const entries = await moodEntries.find(query).toArray();
-
-    if (entries.length === 0) {
-      return res.json({
-        totalEntries: 0,
-        averageScore: 0,
-        moodDistribution: {}
-      });
-    }
-
-    // Calculate statistics
-    const totalEntries = entries.length;
-    const averageScore = entries.reduce((sum, entry) => sum + entry.moodScore, 0) / totalEntries;
-
-    const moodDistribution = entries.reduce((acc, entry) => {
-      acc[entry.mood] = (acc[entry.mood] || 0) + 1;
-      return acc;
-    }, {});
-
-    res.json({
-      totalEntries,
-      averageScore: Math.round(averageScore * 100) / 100,
-      moodDistribution
-    });
-  } catch (error) {
-    console.error('Error calculating mood stats:', error);
-    res.status(500).json({ error: 'Failed to calculate mood statistics' });
   }
 });

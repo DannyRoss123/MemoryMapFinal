@@ -28,6 +28,7 @@ import { moodRouter } from './routes/mood.js';
 import { patientsRouter } from './routes/patients.js';
 import { caregiversRouter } from './routes/caregivers.js';
 import { uploadRouter } from './routes/upload.js';
+import { contactsRouter } from './routes/contacts.js';
 
 const app = express();
 const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map((origin) => origin.trim()).filter(Boolean);
@@ -51,6 +52,7 @@ app.use('/api/mood', moodRouter);
 app.use('/api/patients', patientsRouter);
 app.use('/api/caregivers', caregiversRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/contacts', contactsRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -112,6 +114,14 @@ app.get('/api', (_req, res) => {
         'POST /api/mood': 'Create mood entry',
         'PATCH /api/mood/:id': 'Update mood entry',
         'DELETE /api/mood/:id': 'Delete mood entry'
+      },
+      contacts: {
+        'GET /api/contacts': 'Get all contacts (filterable)',
+        'GET /api/contacts/:id': 'Get contact by ID',
+        'GET /api/contacts/patient/:patientId': 'Get all contacts for a patient',
+        'POST /api/contacts': 'Create contact',
+        'PATCH /api/contacts/:id': 'Update contact',
+        'DELETE /api/contacts/:id': 'Delete contact'
       },
       upload: {
         'POST /api/upload': 'Upload single file',

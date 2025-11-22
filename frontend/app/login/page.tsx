@@ -66,7 +66,16 @@ export default function LoginPage() {
 
       const userData = await response.json();
       login(userData);
-      router.replace('/home');
+
+      // Small delay to ensure user context is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Redirect patients to mood check, caregivers directly to home
+      if (userData.role === 'PATIENT') {
+        router.push('/mood-check');
+      } else {
+        router.push('/home');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {

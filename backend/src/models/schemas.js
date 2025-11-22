@@ -94,8 +94,8 @@ export const Collections = {
  *
  * Fields:
  * - patientId: ObjectId (required)
- * - mood: String (VERY_HAPPY | HAPPY | NEUTRAL | SAD | VERY_SAD) (required)
- * - moodScore: Number (1-5, where 5 is VERY_HAPPY)
+ * - mood: String (HAPPY | CALM | SAD | ANXIOUS | ANGRY | TIRED) (required)
+ * - moodScore: Number (1-5, where 5 is HAPPY and 1 is ANGRY)
  * - notes: String (optional notes about their mood)
  * - date: Date (required - should be one per day)
  * - createdAt: Date
@@ -119,19 +119,21 @@ export const MemoryType = {
 };
 
 export const MoodLevel = {
-  VERY_SAD: 'VERY_SAD',
+  ANGRY: 'ANGRY',
   SAD: 'SAD',
-  NEUTRAL: 'NEUTRAL',
-  HAPPY: 'HAPPY',
-  VERY_HAPPY: 'VERY_HAPPY'
+  ANXIOUS: 'ANXIOUS',
+  TIRED: 'TIRED',
+  CALM: 'CALM',
+  HAPPY: 'HAPPY'
 };
 
 export const MoodScore = {
-  VERY_SAD: 1,
+  ANGRY: 1,
   SAD: 2,
-  NEUTRAL: 3,
-  HAPPY: 4,
-  VERY_HAPPY: 5
+  ANXIOUS: 2,
+  TIRED: 3,
+  CALM: 4,
+  HAPPY: 5
 };
 
 // Indexes for optimal query performance

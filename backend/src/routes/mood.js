@@ -104,7 +104,7 @@ moodRouter.post('/', async (req, res) => {
     // Validate mood
     if (!Object.values(MoodLevel).includes(mood)) {
       return res.status(400).json({
-        error: 'Invalid mood value. Must be one of: VERY_SAD, SAD, NEUTRAL, HAPPY, VERY_HAPPY'
+        error: 'Invalid mood value. Must be one of: HAPPY, CALM, SAD, ANXIOUS, ANGRY, TIRED'
       });
     }
 
@@ -180,7 +180,7 @@ moodRouter.patch('/:id', async (req, res) => {
       // Validate mood
       if (!Object.values(MoodLevel).includes(mood)) {
         return res.status(400).json({
-          error: 'Invalid mood value. Must be one of: VERY_SAD, SAD, NEUTRAL, HAPPY, VERY_HAPPY'
+          error: 'Invalid mood value. Must be one of: HAPPY, CALM, SAD, ANXIOUS, ANGRY, TIRED'
         });
       }
       updateFields.mood = mood;

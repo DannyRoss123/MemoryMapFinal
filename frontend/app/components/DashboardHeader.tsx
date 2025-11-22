@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useUser } from "../context/UserContext";
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000").replace(/\/$/, "");
+
 const navItems = [
   { label: "Home", href: "/home" },
   { label: "Memories", href: "/memories" },
@@ -30,6 +32,11 @@ export function DashboardHeader() {
   }, []);
 
   const isActive = (href: string) => pathname?.startsWith(href);
+  const resolvedAvatar = user?.profileImage
+    ? user.profileImage.startsWith("http")
+      ? user.profileImage
+      : `${API_BASE_URL}${user.profileImage}`
+    : null;
 
   return (
     <header className="bg-white border-b border-gray-200">
@@ -64,14 +71,26 @@ export function DashboardHeader() {
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
-              className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300 overflow-hidden"
               aria-label="Open profile menu"
             >
-              {user?.name?.charAt(0).toUpperCase() || "U"}
+              {resolvedAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={resolvedAvatar} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                user?.name?.charAt(0).toUpperCase() || "U"
+              )}
             </button>
 
             {menuOpen && (
               <div className="absolute right-0 top-12 w-40 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-10">
+                <Link
+                  href="/settings"
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Settings
+                </Link>
                 <button
                   onClick={() => logout()}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"

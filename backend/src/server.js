@@ -102,7 +102,10 @@ app.get('/api', (_req, res) => {
       journal: {
         'GET /api/journal': 'Get all journal entries (filterable)',
         'GET /api/journal/:id': 'Get journal entry by ID',
+        'GET /api/journal/:id/messages': 'Get chat history for a journal entry',
         'POST /api/journal': 'Create journal entry',
+        'POST /api/journal/:id/chat': 'Generate AI response for a journal entry and persist conversation',
+        'POST /api/journal/voice/transcribe': 'Transcribe an audio file to text',
         'PATCH /api/journal/:id': 'Update journal entry',
         'DELETE /api/journal/:id': 'Delete journal entry'
       },

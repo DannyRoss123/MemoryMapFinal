@@ -2,8 +2,13 @@ import { Router } from 'express';
 import { ObjectId } from 'mongodb';
 import { Collections } from '../services/db.js';
 import { getDb } from '../services/db.js';
+import multer from 'multer';
 
 export const journalRouter = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit for audio
+});
 
 // GET /api/journal - Get all journal entries (with optional filters)
 // Query params: patientId, startDate, endDate
@@ -39,6 +44,49 @@ journalRouter.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching journal entries:', error);
     res.status(500).json({ error: 'Failed to fetch journal entries' });
+  }
+});
+
+// POST /api/journal/voice/transcribe - Transcribe voice input into text using OpenAI Whisper
+journalRouter.post('/voice/transcribe', upload.single('audio'), async (req, res) => {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    const model = process.env.OPENAI_WHISPER_MODEL || 'whisper-1';
+    const formData = new FormData();
+    const blob = new Blob([req.file.buffer], {
+      type: req.file.mimetype || 'audio/webm'
+    });
+
+    formData.append('file', blob, req.file.originalname || 'voice.webm');
+    formData.append('model', model);
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error('Whisper error:', response.status, errorText);
+      return res.status(500).json({ error: 'Failed to transcribe audio' });
+    }
+
+    const data = await response.json();
+    return res.json({ text: data?.text || '' });
+  } catch (error) {
+    console.error('Error transcribing audio:', error);
+    res.status(500).json({ error: 'Failed to transcribe audio' });
   }
 });
 

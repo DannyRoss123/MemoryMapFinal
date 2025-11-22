@@ -12,6 +12,7 @@ export type User = {
   location?: string;
   caregiverId?: string;
   caregiverName?: string;
+  profileImage?: string | null;
 };
 
 type UserContextValue = {

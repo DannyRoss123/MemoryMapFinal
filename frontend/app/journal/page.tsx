@@ -36,6 +36,18 @@ export default function JournalPage() {
   const [chatError, setChatError] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const [isChatRecording, setIsChatRecording] = useState(false);
+  const [isChatTranscribing, setIsChatTranscribing] = useState(false);
+  const [chatVoiceError, setChatVoiceError] = useState("");
+  const chatRecorderRef = useRef<MediaRecorder | null>(null);
+  const chatStreamRef = useRef<MediaStream | null>(null);
+  const chatChunksRef = useRef<BlobPart[]>([]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -230,12 +242,162 @@ export default function JournalPage() {
     sendToAssistant(activeEntry, pendingMessages);
   };
 
+  const sendAudio = async (blob: Blob) => {
+    setIsTranscribing(true);
+    setVoiceError("");
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "voice-entry.webm");
+
+      const res = await fetch(`${API_BASE_URL}/api/journal/voice/transcribe`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to transcribe audio");
+      }
+
+      const data = await res.json();
+      const text = data?.text || "";
+      if (text) {
+        setEntryText((prev) => (prev ? `${prev}\n${text}` : text));
+      }
+    } catch (err) {
+      console.error(err);
+      setVoiceError("Unable to transcribe. Please try again.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const startVoiceRecording = async () => {
+    setVoiceError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+        sendAudio(audioBlob);
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch (err) {
+      console.error(err);
+      setVoiceError("Microphone access was denied or unavailable.");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const sendChatAudio = async (blob: Blob) => {
+    setIsChatTranscribing(true);
+    setChatVoiceError("");
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "chat-entry.webm");
+
+      const res = await fetch(`${API_BASE_URL}/api/journal/voice/transcribe`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to transcribe audio");
+      }
+
+      const data = await res.json();
+      const text = data?.text || "";
+      if (text) {
+        setChatInput((prev) => (prev ? `${prev} ${text}` : text));
+      }
+    } catch (err) {
+      console.error(err);
+      setChatVoiceError("Unable to transcribe. Please try again.");
+    } finally {
+      setIsChatTranscribing(false);
+    }
+  };
+
+  const startChatVoiceRecording = async () => {
+    setChatVoiceError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chatStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      chatChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chatChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(chatChunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((t) => t.stop());
+        chatStreamRef.current = null;
+        sendChatAudio(audioBlob);
+      };
+
+      recorder.start();
+      chatRecorderRef.current = recorder;
+      setIsChatRecording(true);
+    } catch (err) {
+      console.error(err);
+      setChatVoiceError("Microphone access was denied or unavailable.");
+    }
+  };
+
+  const stopChatVoiceRecording = () => {
+    if (chatRecorderRef.current && chatRecorderRef.current.state === "recording") {
+      chatRecorderRef.current.stop();
+      setIsChatRecording(false);
+    }
+  };
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatMessages, chatOpen]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (chatRecorderRef.current && chatRecorderRef.current.state === "recording") {
+        chatRecorderRef.current.stop();
+      }
+      if (chatStreamRef.current) {
+        chatStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
 
   if (isLoading || !user) {
     return (
@@ -271,19 +433,37 @@ export default function JournalPage() {
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 {error && <p className="text-sm text-red-600">{error}</p>}
+                {voiceError && <p className="text-sm text-red-600">{voiceError}</p>}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm text-gray-500">
                     Your entry stays private. Share as much or as little as you’d like.
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveEntry}
-                    disabled={isSaving}
-                    className="px-5 py-3 bg-blue-600 text-white font-semibold rounded-xl shadow-sm hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {isSaving ? "Saving..." : "Save entry & talk about it"}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                      disabled={isSaving || isTranscribing}
+                      className={`px-4 py-3 rounded-xl font-semibold shadow-sm border ${
+                        isRecording
+                          ? "bg-red-50 text-red-700 border-red-200"
+                          : "bg-white text-gray-800 border-gray-200 hover:border-blue-300"
+                      } disabled:opacity-60 disabled:cursor-not-allowed`}
+                    >
+                      {isRecording ? "Stop Recording" : "Voice Entry"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEntry}
+                      disabled={isSaving}
+                      className="px-5 py-3 bg-blue-600 text-white font-semibold rounded-xl shadow-sm hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isSaving ? "Saving..." : "Save entry & talk about it"}
+                    </button>
+                  </div>
                 </div>
+                {isTranscribing && (
+                  <p className="text-sm text-gray-500">Transcribing your voice entry...</p>
+                )}
               </div>
             </div>
 
@@ -426,9 +606,29 @@ export default function JournalPage() {
                     </div>
                   </div>
                 )}
+                {chatVoiceError && (
+                  <div className="px-6">
+                    <div className="mb-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {chatVoiceError}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
                   <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={isChatRecording ? stopChatVoiceRecording : startChatVoiceRecording}
+                      disabled={isChatTranscribing || isSending}
+                      className={`px-3 py-3 rounded-xl border font-semibold ${
+                        isChatRecording
+                          ? "bg-red-50 text-red-700 border-red-200"
+                          : "bg-white text-gray-800 border-gray-300 hover:border-blue-300"
+                      } disabled:opacity-60 disabled:cursor-not-allowed`}
+                      aria-label="Voice chat entry"
+                    >
+                      {isChatRecording ? "Stop" : "🎤"}
+                    </button>
                     <input
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
@@ -444,12 +644,15 @@ export default function JournalPage() {
                     <button
                       type="button"
                       onClick={handleSendChat}
-                      disabled={isSending}
+                      disabled={isSending || isChatTranscribing}
                       className="px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl shadow-sm hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {isSending ? "Sending..." : "Send"}
+                      {isSending ? "Sending..." : isChatTranscribing ? "Transcribing..." : "Send"}
                     </button>
                   </div>
+                  {isChatTranscribing && (
+                    <p className="mt-2 text-sm text-gray-500">Transcribing your voice message...</p>
+                  )}
                 </div>
               </div>
             </div>

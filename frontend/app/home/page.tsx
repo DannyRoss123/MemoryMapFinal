@@ -1,19 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useUser } from '../context/UserContext';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { DashboardHeader } from "../components/DashboardHeader";
+import { useUser } from "../context/UserContext";
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000").replace(/\/$/, "");
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, logout, isLoading } = useUser();
+  const { user, isLoading } = useUser();
   const [tasks, setTasks] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -41,18 +40,6 @@ export default function HomePage() {
       fetchTodayMood();
     }
   }, [user]);
-
-  // Close profile menu on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Fetch tasks
   useEffect(() => {
@@ -129,48 +116,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 animate-fade-in">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            {/* Logo and Navigation stacked so the title sits above the tabs */}
-            <div className="flex flex-col">
-              <h1 className="text-xl font-semibold text-gray-900">Memory Map</h1>
-              <nav className="hidden md:flex space-x-6 mt-2">
-                <button className="text-gray-900 font-medium border-b-2 border-blue-600 pb-1">Home</button>
-                <button className="text-gray-600 hover:text-gray-900">Memories</button>
-                <button className="text-gray-600 hover:text-gray-900">Journal</button>
-                <button className="text-gray-600 hover:text-gray-900">Contacts</button>
-              </nav>
-            </div>
-
-            {/* User Profile */}
-            <div className="relative flex items-center space-x-3" ref={menuRef}>
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                <p className="text-xs text-gray-500">Patient</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMenuOpen((prev) => !prev)}
-                className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                {user.name?.charAt(0).toUpperCase()}
-              </button>
-
-              {menuOpen && (
-                <div className="absolute right-0 top-12 w-40 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-10">
-                  <button
-                    onClick={() => logout()}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      <DashboardHeader />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

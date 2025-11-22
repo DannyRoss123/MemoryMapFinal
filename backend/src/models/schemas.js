@@ -1,0 +1,165 @@
+/**
+ * MongoDB Schema Definitions
+ * This file defines the structure and validation for all collections
+ */
+
+export const Collections = {
+  USERS: 'users',
+  CAREGIVERS: 'caregivers',
+  TASKS: 'tasks',
+  MEMORIES: 'memories',
+  JOURNAL_ENTRIES: 'journalEntries',
+  MOOD_ENTRIES: 'moodEntries'
+};
+
+/**
+ * User Schema
+ * Represents both patients and caregivers
+ *
+ * Fields:
+ * - name: String (required)
+ * - role: String (PATIENT | CAREGIVER) (required)
+ * - location: String (required)
+ * - caregiverId: ObjectId (for patients - reference to their assigned caregiver)
+ * - caregiverName: String (denormalized for quick access)
+ * - profileImage: String (URL or path to profile image)
+ * - createdAt: Date
+ * - updatedAt: Date
+ */
+
+/**
+ * Caregiver Schema
+ * Extended information for caregivers
+ *
+ * Fields:
+ * - name: String (required)
+ * - location: String (required)
+ * - profileImage: String (URL or path to profile image)
+ * - patients: Array<ObjectId> (list of assigned patient IDs)
+ * - createdAt: Date
+ * - updatedAt: Date
+ */
+
+/**
+ * Task Schema
+ * Daily tasks assigned to patients by caregivers
+ *
+ * Fields:
+ * - patientId: ObjectId (required - reference to user with role PATIENT)
+ * - caregiverId: ObjectId (required - who assigned the task)
+ * - title: String (required)
+ * - description: String
+ * - dueDate: Date (required)
+ * - completed: Boolean (default: false)
+ * - completedAt: Date
+ * - priority: String (LOW | MEDIUM | HIGH)
+ * - createdAt: Date
+ * - updatedAt: Date
+ */
+
+/**
+ * Memory Schema
+ * Images and videos uploaded by caregivers for patients
+ *
+ * Fields:
+ * - patientId: ObjectId (required)
+ * - caregiverId: ObjectId (required - who uploaded it)
+ * - type: String (IMAGE | VIDEO) (required)
+ * - url: String (required - path to file or URL)
+ * - title: String
+ * - description: String
+ * - caption: String
+ * - fileSize: Number (in bytes)
+ * - mimeType: String
+ * - createdAt: Date
+ * - updatedAt: Date
+ */
+
+/**
+ * JournalEntry Schema
+ * Journal entries written by patients
+ *
+ * Fields:
+ * - patientId: ObjectId (required)
+ * - content: String (required)
+ * - title: String
+ * - date: Date (required - the date the entry is about)
+ * - createdAt: Date
+ * - updatedAt: Date
+ */
+
+/**
+ * MoodEntry Schema
+ * Daily mood tracking for patients
+ *
+ * Fields:
+ * - patientId: ObjectId (required)
+ * - mood: String (VERY_HAPPY | HAPPY | NEUTRAL | SAD | VERY_SAD) (required)
+ * - moodScore: Number (1-5, where 5 is VERY_HAPPY)
+ * - notes: String (optional notes about their mood)
+ * - date: Date (required - should be one per day)
+ * - createdAt: Date
+ */
+
+// Validation helpers
+export const UserRoles = {
+  PATIENT: 'PATIENT',
+  CAREGIVER: 'CAREGIVER'
+};
+
+export const TaskPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH'
+};
+
+export const MemoryType = {
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO'
+};
+
+export const MoodLevel = {
+  VERY_SAD: 'VERY_SAD',
+  SAD: 'SAD',
+  NEUTRAL: 'NEUTRAL',
+  HAPPY: 'HAPPY',
+  VERY_HAPPY: 'VERY_HAPPY'
+};
+
+export const MoodScore = {
+  VERY_SAD: 1,
+  SAD: 2,
+  NEUTRAL: 3,
+  HAPPY: 4,
+  VERY_HAPPY: 5
+};
+
+// Indexes for optimal query performance
+export const indexes = {
+  users: [
+    { key: { role: 1 } },
+    { key: { caregiverId: 1 } },
+    { key: { name: 1 }, unique: false }
+  ],
+  caregivers: [
+    { key: { name: 1 }, unique: true }
+  ],
+  tasks: [
+    { key: { patientId: 1, dueDate: -1 } },
+    { key: { caregiverId: 1 } },
+    { key: { completed: 1, dueDate: -1 } }
+  ],
+  memories: [
+    { key: { patientId: 1, createdAt: -1 } },
+    { key: { caregiverId: 1 } },
+    { key: { type: 1 } }
+  ],
+  journalEntries: [
+    { key: { patientId: 1, date: -1 } },
+    { key: { createdAt: -1 } }
+  ],
+  moodEntries: [
+    { key: { patientId: 1, date: -1 } },
+    { key: { patientId: 1, date: 1 }, unique: true } // One mood entry per patient per day
+  ]
+};

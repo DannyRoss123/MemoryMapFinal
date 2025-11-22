@@ -1,72 +1,72 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Role, useUser } from '../context/UserContext';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useUser } from '../context/UserContext';
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000').replace(/\/$/, '');
 
-const ROLE_LABELS: Record<Role, string> = {
-  PATIENT: 'Patient',
-  CAREGIVER: 'Caregiver'
-};
-
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, login, isLoading } = useUser();
-  const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
-  const [role, setRole] = useState<Role>('PATIENT');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    // Show success message if redirected from registration
+    if (searchParams?.get('registered') === 'true') {
+      setSuccess('Account created successfully! Please sign in.');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!isLoading && user) {
-      const destination = user.role === 'PATIENT' ? '/patient/dashboard' : '/caregiver/dashboard';
-      router.replace(destination);
+      router.replace('/home');
     }
   }, [user, isLoading, router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-    if (!name.trim()) {
-      setError('Please enter your name.');
+    setSuccess('');
+
+    if (!email.trim()) {
+      setError('Please enter your email.');
       return;
     }
-    if (!location.trim()) {
-      setError('Please enter your location.');
+
+    if (!password) {
+      setError('Please enter your password.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name: name.trim(), location: location.trim(), role })
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password
+        })
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         const message = typeof data?.error === 'string' ? data.error : undefined;
-        throw new Error(message || 'Unable to log in');
+        throw new Error(message || 'Invalid email or password');
       }
 
-      const userData = (await response.json()) as {
-        userId: string;
-        name: string;
-        role: Role;
-        location: string;
-        caregiverId?: string;
-        caregiverName?: string;
-      };
-
+      const userData = await response.json();
       login(userData);
-      const destination = userData.role === 'PATIENT' ? '/patient/dashboard' : '/caregiver/dashboard';
-      router.replace(destination);
+      router.replace('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
@@ -91,78 +91,85 @@ export default function LoginPage() {
           <h1 className="text-5xl md:text-6xl font-semibold text-white leading-tight">Memory Map</h1>
           <h2 className="text-2xl md:text-3xl text-white/90 font-medium mt-2">A clear path to supportive care</h2>
           <p className="text-base md:text-lg text-white/75 mt-4 max-w-xl mx-auto">
-            Stay organized, share updates, and keep everyone aligned. Log in to get started as a patient or caregiver.
+            Stay organized, share updates, and keep everyone aligned.
           </p>
         </div>
 
         <form
-          className="mt-10 w-full max-w-xl rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-6 md:px-8 md:py-8 space-y-6"
+          className="mt-10 w-full max-w-md rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-6 md:px-8 md:py-8 space-y-6"
           onSubmit={handleSubmit}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-4">
-            <div className="space-y-1">
-              <label htmlFor="name" className="block text-sm font-medium text-white/90">
-                Name
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-2xl border border-white/30 bg-white/15 px-4 py-3 text-base text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/70 focus:border-white/70"
-                placeholder="Enter your name"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="location" className="block text-sm font-medium text-white/90">
-                Location
-              </label>
-              <input
-                id="location"
-                name="location"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full rounded-2xl border border-white/30 bg-white/15 px-4 py-3 text-base text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/70 focus:border-white/70"
-                placeholder="City, State"
-              />
-            </div>
+          <div className="text-center">
+            <h3 className="text-xl font-semibold text-white">Sign In</h3>
+            <p className="text-sm text-white/70 mt-1">Welcome back! Please enter your details</p>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-white/90">Role</p>
-            <div className="inline-flex w-full rounded-2xl bg-white/10 p-1 border border-white/20">
-              {(Object.keys(ROLE_LABELS) as Role[]).map((option) => {
-                const isSelected = role === option;
-                return (
-                  <button
-                    type="button"
-                    key={option}
-                    onClick={() => setRole(option)}
-                    className={`flex-1 rounded-2xl px-4 py-2 text-sm md:text-base transition ${
-                      isSelected ? 'bg-white text-[#0f5ca8] shadow-sm' : 'bg-transparent text-white/80'
-                    }`}
-                  >
-                    {ROLE_LABELS[option]}
-                  </button>
-                );
-              })}
+          {/* Success Message */}
+          {success ? (
+            <div className="rounded-2xl bg-green-500/20 border border-green-300/30 px-4 py-3">
+              <p className="text-sm text-white">{success}</p>
             </div>
+          ) : null}
+
+          {/* Email */}
+          <div className="space-y-1">
+            <label htmlFor="email" className="block text-sm font-medium text-white/90">
+              Email Address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-2xl border border-white/40 bg-white/90 px-4 py-3 text-base text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+              placeholder="john@example.com"
+              required
+              autoComplete="email"
+            />
           </div>
 
-          {error ? <p className="text-sm text-red-200">{error}</p> : null}
+          {/* Password */}
+          <div className="space-y-1">
+            <label htmlFor="password" className="block text-sm font-medium text-white/90">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-2xl border border-white/40 bg-white/90 px-4 py-3 text-base text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+              placeholder="••••••••"
+              required
+              autoComplete="current-password"
+            />
+          </div>
 
+          {/* Error Message */}
+          {error ? (
+            <div className="rounded-2xl bg-red-500/20 border border-red-300/30 px-4 py-3">
+              <p className="text-sm text-white">{error}</p>
+            </div>
+          ) : null}
+
+          {/* Submit Button */}
           <div className="space-y-3">
             <button
               type="submit"
               disabled={isSubmitting}
               className="w-full mt-2 rounded-2xl bg-gradient-to-r from-[#5ac2ff] to-[#3f89ff] py-3.5 text-base font-semibold text-white shadow-md hover:shadow-lg hover:brightness-105 transition disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? 'Continuing...' : 'Continue'}
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
-            <p className="text-xs text-white/60 text-center">By continuing, you agree to our terms.</p>
+
+            <p className="text-sm text-white/80 text-center">
+              Don't have an account?{' '}
+              <Link href="/register" className="text-white font-semibold hover:underline">
+                Sign up
+              </Link>
+            </p>
           </div>
         </form>
       </div>

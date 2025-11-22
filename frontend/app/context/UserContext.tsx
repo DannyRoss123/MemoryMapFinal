@@ -7,8 +7,9 @@ export type Role = 'PATIENT' | 'CAREGIVER';
 export type User = {
   userId: string;
   name: string;
+  email?: string;
   role: Role;
-  location: string;
+  location?: string;
   caregiverId?: string;
   caregiverName?: string;
 };

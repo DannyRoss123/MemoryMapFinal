@@ -141,6 +141,15 @@ moodRouter.post('/', async (req, res) => {
     const result = await moodEntries.insertOne(newEntry);
     const createdEntry = await moodEntries.findOne({ _id: result.insertedId });
 
+    console.log('✓ New mood entry created:', {
+      moodId: result.insertedId.toString(),
+      patientId,
+      mood: newEntry.mood,
+      moodScore: newEntry.moodScore,
+      date: newEntry.date.toISOString(),
+      timestamp: new Date().toISOString()
+    });
+
     res.status(201).json(createdEntry);
   } catch (error) {
     console.error('Error creating mood entry:', error);

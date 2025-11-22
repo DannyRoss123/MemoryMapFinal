@@ -104,6 +104,15 @@ memoriesRouter.post('/', async (req, res) => {
     const result = await memories.insertOne(newMemory);
     const createdMemory = await memories.findOne({ _id: result.insertedId });
 
+    console.log('✓ New memory created:', {
+      memoryId: result.insertedId.toString(),
+      patientId,
+      type: newMemory.type,
+      title: newMemory.title || 'Untitled',
+      fileSize: newMemory.fileSize,
+      timestamp: new Date().toISOString()
+    });
+
     res.status(201).json(createdMemory);
   } catch (error) {
     console.error('Error creating memory:', error);

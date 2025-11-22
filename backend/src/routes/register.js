@@ -60,15 +60,30 @@ registerRouter.post('/', async (req, res) => {
       updatedAt: new Date()
     });
 
+    console.log('✓ New user registered:', {
+      userId: result.insertedId.toString(),
+      name,
+      email: normalizedEmail,
+      role,
+      timestamp: new Date().toISOString()
+    });
+
     // If caregiver, also create caregiver record
     if (role === 'CAREGIVER') {
       const caregivers = db.collection('caregivers');
-      await caregivers.insertOne({
+      const caregiverResult = await caregivers.insertOne({
         userId: result.insertedId,
         name,
         email: normalizedEmail,
         createdAt: new Date(),
         updatedAt: new Date()
+      });
+
+      console.log('✓ Caregiver record created:', {
+        caregiverId: caregiverResult.insertedId.toString(),
+        userId: result.insertedId.toString(),
+        name,
+        timestamp: new Date().toISOString()
       });
     }
 

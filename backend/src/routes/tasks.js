@@ -110,6 +110,15 @@ tasksRouter.post('/', async (req, res) => {
     const result = await tasks.insertOne(newTask);
     const createdTask = await tasks.findOne({ _id: result.insertedId });
 
+    console.log('✓ New task created:', {
+      taskId: result.insertedId.toString(),
+      patientId,
+      title: newTask.title,
+      dueDate: newTask.dueDate.toISOString(),
+      priority: newTask.priority,
+      timestamp: new Date().toISOString()
+    });
+
     res.status(201).json(createdTask);
   } catch (error) {
     console.error('Error creating task:', error);

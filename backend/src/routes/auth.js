@@ -48,7 +48,7 @@ authRouter.post('/login', async (req, res) => {
     }
 
     // Return user data (excluding password)
-    return res.json({
+    const userData = {
       userId: user._id.toString(),
       name: user.name,
       email: user.email,
@@ -56,7 +56,16 @@ authRouter.post('/login', async (req, res) => {
       location: user.location,
       caregiverId: caregiverId?.toString(),
       caregiverName
+    };
+
+    console.log('✓ User logged in:', {
+      userId: userData.userId,
+      email: userData.email,
+      role: userData.role,
+      timestamp: new Date().toISOString()
     });
+
+    return res.json(userData);
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ error: 'Unable to log in' });

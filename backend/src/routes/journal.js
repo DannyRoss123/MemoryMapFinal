@@ -87,6 +87,15 @@ journalRouter.post('/', async (req, res) => {
     const result = await journalEntries.insertOne(newEntry);
     const createdEntry = await journalEntries.findOne({ _id: result.insertedId });
 
+    console.log('✓ New journal entry created:', {
+      entryId: result.insertedId.toString(),
+      patientId,
+      title: newEntry.title || 'Untitled',
+      date: newEntry.date.toISOString(),
+      contentLength: newEntry.content.length,
+      timestamp: new Date().toISOString()
+    });
+
     res.status(201).json(createdEntry);
   } catch (error) {
     console.error('Error creating journal entry:', error);

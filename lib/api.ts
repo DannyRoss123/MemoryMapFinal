@@ -19,24 +19,44 @@ async function apiCall<T>(
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    credentials: 'include', // Important for cookies/sessions
-  });
+  console.log('API Call:', { url, method: options.method || 'GET' });
 
-  if (!response.ok) {
-    const error: ApiError = {
-      message: `API Error: ${response.statusText}`,
-      status: response.status,
-    };
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      credentials: 'include', // Important for cookies/sessions
+    });
+
+    console.log('API Response:', { status: response.status, statusText: response.statusText });
+
+    if (!response.ok) {
+      let errorMessage = `API Error: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch (e) {
+        // Response body is not JSON
+      }
+
+      const error: ApiError = {
+        message: errorMessage,
+        status: response.status,
+      };
+      throw error;
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('API Call Failed:', error);
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Cannot connect to backend. Make sure the backend is running on http://localhost:4000');
+    }
     throw error;
   }
-
-  return response.json();
 }
 
 // ==================== AUTH API ====================

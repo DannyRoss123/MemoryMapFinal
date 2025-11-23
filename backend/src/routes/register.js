@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import { getDb } from '../services/db.js';
 
 const SALT_ROUNDS = 10;
-const roles = ['PATIENT', 'CAREGIVER'];
+const roles = ['PATIENT', 'CAREGIVER', 'ADMIN'];
 
 export const registerRouter = Router();
 

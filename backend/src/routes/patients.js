@@ -152,8 +152,27 @@ patientsRouter.patch('/:id', async (req, res) => {
     if (location !== undefined) updateFields.location = location.trim();
     if (profileImage !== undefined) updateFields.profileImage = profileImage;
 
-    // If caregiverId is being updated, get the caregiver name
+    // Get current patient data to check if caregiver is changing
+    const patientId = new ObjectId(req.params.id);
+    const currentPatient = await users.findOne({ _id: patientId, role: 'PATIENT' });
+
+    if (!currentPatient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    // If caregiverId is being updated, maintain bi-directional relationship
     if (caregiverId !== undefined) {
+      // Remove patient from old caregiver's list if they had one
+      if (currentPatient.caregiverId) {
+        await caregivers.updateOne(
+          { _id: currentPatient.caregiverId },
+          {
+            $pull: { patients: patientId },
+            $set: { updatedAt: new Date() }
+          }
+        );
+      }
+
       if (caregiverId) {
         const caregiver = await caregivers.findOne({ _id: new ObjectId(caregiverId) });
         if (!caregiver) {
@@ -161,6 +180,15 @@ patientsRouter.patch('/:id', async (req, res) => {
         }
         updateFields.caregiverId = new ObjectId(caregiverId);
         updateFields.caregiverName = caregiver.name;
+
+        // Add patient to new caregiver's list
+        await caregivers.updateOne(
+          { _id: new ObjectId(caregiverId) },
+          {
+            $addToSet: { patients: patientId },
+            $set: { updatedAt: new Date() }
+          }
+        );
       } else {
         // Remove caregiver assignment
         updateFields.caregiverId = null;
@@ -169,14 +197,10 @@ patientsRouter.patch('/:id', async (req, res) => {
     }
 
     const result = await users.findOneAndUpdate(
-      { _id: new ObjectId(req.params.id), role: 'PATIENT' },
+      { _id: patientId },
       { $set: updateFields },
       { returnDocument: 'after' }
     );
-
-    if (!result) {
-      return res.status(404).json({ error: 'Patient not found' });
-    }
 
     res.json(result);
   } catch (error) {

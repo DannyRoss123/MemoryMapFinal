@@ -3,12 +3,12 @@ import bcrypt from 'bcrypt';
 import { getDb } from '../services/db.js';
 
 const SALT_ROUNDS = 10;
-const roles = ['PATIENT', 'CAREGIVER'];
+const roles = ['PATIENT', 'CAREGIVER', 'ADMIN'];
 
 export const registerRouter = Router();
 
 registerRouter.post('/', async (req, res) => {
-  const { firstName, lastName, email, password, role } = req.body;
+  const { firstName, lastName, email, password, role, location } = req.body;
 
   // Validation
   if (!firstName?.trim() || !lastName?.trim()) {
@@ -30,6 +30,10 @@ registerRouter.post('/', async (req, res) => {
 
   if (!role || !roles.includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  if (!location?.trim()) {
+    return res.status(400).json({ error: 'Location is required' });
   }
 
   try {
@@ -56,6 +60,7 @@ registerRouter.post('/', async (req, res) => {
       email: normalizedEmail,
       password: hashedPassword,
       role,
+      location: location.trim(),
       createdAt: new Date(),
       updatedAt: new Date()
     });
@@ -65,34 +70,38 @@ registerRouter.post('/', async (req, res) => {
       name,
       email: normalizedEmail,
       role,
+      location: location.trim(),
       timestamp: new Date().toISOString()
     });
 
-    // If caregiver, also create caregiver record
+    // If caregiver, also create caregiver record with the same _id
     if (role === 'CAREGIVER') {
       const caregivers = db.collection('caregivers');
-      const caregiverResult = await caregivers.insertOne({
-        userId: result.insertedId,
+      await caregivers.insertOne({
+        _id: result.insertedId, // Use same ID as user
         name,
-        email: normalizedEmail,
+        location: location.trim(),
+        patients: [], // Initialize empty patients array
         createdAt: new Date(),
         updatedAt: new Date()
       });
 
       console.log('✓ Caregiver record created:', {
-        caregiverId: caregiverResult.insertedId.toString(),
-        userId: result.insertedId.toString(),
+        caregiverId: result.insertedId.toString(),
         name,
+        location: location.trim(),
         timestamp: new Date().toISOString()
       });
     }
 
     return res.status(201).json({
       message: 'Registration successful',
-      userId: result.insertedId.toString()
+      userId: result.insertedId.toString(),
+      role,
+      name
     });
   } catch (error) {
     console.error('Registration error:', error);
-    return res.status(500).json({ error: 'Unable to register' });
+    return res.status(500).json({ error: 'Unable to register. Please try again.' });
   }
 });

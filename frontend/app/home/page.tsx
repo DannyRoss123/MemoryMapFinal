@@ -14,6 +14,7 @@ export default function HomePage() {
   const [contacts, setContacts] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
   const [recentMemories, setRecentMemories] = useState([]);
+  const [assignedCaregiver, setAssignedCaregiver] = useState(null);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -101,6 +102,27 @@ export default function HomePage() {
 
     if (user?.userId && user?.role === 'PATIENT') {
       fetchContacts();
+    }
+  }, [user]);
+
+  // Fetch assigned caregiver
+  useEffect(() => {
+    const fetchAssignedCaregiver = async () => {
+      if (!user?.userId) return;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/assignments/patient/${user.userId}/caregiver`);
+        if (response.ok) {
+          const data = await response.json();
+          setAssignedCaregiver(data);
+        }
+      } catch (error) {
+        console.error('Error fetching assigned caregiver:', error);
+      }
+    };
+
+    if (user?.userId && user?.role === 'PATIENT') {
+      fetchAssignedCaregiver();
     }
   }, [user]);
 
@@ -235,8 +257,25 @@ export default function HomePage() {
             {/* Care Team */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Care Team</h3>
-              {careTeam.length > 0 ? (
+              {(assignedCaregiver || careTeam.length > 0) ? (
                 <div className="space-y-4">
+                  {/* Assigned Caregiver */}
+                  {assignedCaregiver && (
+                    <div className="flex items-start space-x-3 pb-4 border-b border-gray-100">
+                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold flex-shrink-0">
+                        {assignedCaregiver.name?.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900">{assignedCaregiver.name}</p>
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Primary</span>
+                        </div>
+                        <p className="text-sm text-gray-500">Caregiver</p>
+                        <p className="text-xs text-gray-400 mt-1">{assignedCaregiver.location}</p>
+                      </div>
+                    </div>
+                  )}
+                  {/* Other Care Team Members */}
                   {careTeam.map((contact, index) => (
                     <div key={index} className="flex items-start space-x-3">
                       <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold flex-shrink-0">

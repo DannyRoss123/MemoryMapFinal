@@ -29,6 +29,9 @@ interface Task {
   description: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
   dueDate?: string;
+  patientId?: string | null;
+  status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  completed?: boolean;
 }
 
 export default function CaregiverDashboardPage() {
@@ -47,11 +50,29 @@ export default function CaregiverDashboardPage() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
-  const [taskPatientId, setTaskPatientId] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
   const [taskPriority, setTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
+  const [taskStatus, setTaskStatus] = useState<'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('PENDING');
   const [creatingTask, setCreatingTask] = useState(false);
   const [taskError, setTaskError] = useState('');
+  // Keeping for compatibility; we don't require patient for caregiver tasks
+  const taskPatientId = '';
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{ taskId: string; targetStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' } | null>(null);
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [savingTask, setSavingTask] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Reset edit state when opening/closing task modal
+  useEffect(() => {
+    if (selectedTask) {
+      setSavingTask(false);
+      setEditError('');
+    }
+  }, [selectedTask]);
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== 'CAREGIVER')) {
@@ -96,12 +117,16 @@ export default function CaregiverDashboardPage() {
       const res = await fetch(`${API_BASE_URL}/api/tasks?caregiverId=${user.userId}`);
       if (res.ok) {
         const data = await res.json();
-        const mapped = (data || []).slice(0, 3);
+        const mapped = (data || []).map((t: any) => ({
+          ...t,
+          _id: t._id?.toString ? t._id.toString() : t._id,
+          status: t.status || (t.completed ? 'COMPLETED' : 'PENDING')
+        }));
         setTasks(mapped);
         setStats(prev => ({
           ...prev,
           tasksDueToday: mapped.length,
-          tasksInProgress: mapped.filter((t: any) => !t.completed).length
+          tasksInProgress: mapped.filter((t: any) => t.status === 'IN_PROGRESS').length
         }));
       }
     } catch (error) {
@@ -266,36 +291,78 @@ export default function CaregiverDashboardPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                     </svg>
                   </button>
-                  <span className="text-sm text-gray-600">{tasks.length} tasks</span>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {tasks.length === 0 ? (
-                  <div className="text-gray-500 text-sm">No tasks yet. Add one to get started.</div>
-                ) : (
-                  tasks.map((task) => (
-                    <div key={task._id} className={`rounded-lg p-4 ${getPriorityColor(task.priority)}`}>
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        {getPriorityBadge(task.priority)}
-                        <h4 className="font-semibold text-gray-900 mt-2">{task.title}</h4>
-                        <p className="text-sm text-gray-600 mt-1">{task.description}</p>
-                        {task.dueDate && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Due {new Date(task.dueDate).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                          </p>
-                        )}
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['PENDING', 'IN_PROGRESS', 'COMPLETED'].map((status) => (
+                  <div
+                    key={status}
+                    className="bg-gray-50 rounded-lg p-3 border border-gray-100 min-h-[260px]"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (!dragTaskId) return;
+                      const newStatus = status as 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+                      setPendingStatusUpdate({ taskId: dragTaskId, targetStatus: newStatus });
+                      setShowStatusModal(true);
+                      setDragTaskId(null);
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-gray-800">
+                        {status === 'PENDING' && 'Pending'}
+                        {status === 'IN_PROGRESS' && 'In Progress'}
+                        {status === 'COMPLETED' && 'Completed'}
+                      </p>
+                      <span className="text-xs text-gray-500">
+                        {tasks.filter((t) => (t.status || 'PENDING') === status).length}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {tasks
+                        .filter((t) => (t.status || 'PENDING') === status)
+                        .map((task) => (
+                          <div
+                            key={task._id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.currentTarget.classList.add('opacity-60');
+                              setDragTaskId(task._id);
+                            }}
+                            onDragEnd={(e) => {
+                              e.currentTarget.classList.remove('opacity-60');
+                              setDragTaskId(null);
+                            }}
+                            onClick={() => setSelectedTask(task)}
+                            className={`bg-white rounded-lg p-3 shadow-sm border ${getPriorityColor(task.priority)} h-32 flex flex-col cursor-pointer`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                {getPriorityBadge(task.priority)}
+                                <h4 className="font-semibold text-gray-900 mt-1">{task.title}</h4>
+                                <p className="text-xs text-gray-500">
+                                  {(task.status || 'PENDING').replace('_', ' ')}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                              {task.description}
+                            </p>
+                            {task.dueDate && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Due {new Date(task.dueDate).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      {tasks.filter((t) => (t.status || 'PENDING') === status).length === 0 && (
+                        <div className="text-xs text-gray-400">No tasks</div>
+                      )}
                     </div>
                   </div>
-                  ))
-                )}
+                ))}
               </div>
-
-              <button className="w-full mt-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">
-                Open Patient Workspaces
-              </button>
             </div>
 
             {/* Activity Feed */}
@@ -353,21 +420,11 @@ export default function CaregiverDashboardPage() {
                 {taskError}
               </div>
             )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Patient</label>
-              <select
-                value={taskPatientId}
-                onChange={(e) => setTaskPatientId(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Select a patient</option>
-                {patients.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {statusError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {statusError}
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Title</label>
               <input
@@ -387,29 +444,41 @@ export default function CaregiverDashboardPage() {
                 placeholder="Add details"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Due date/time</label>
-                <input
-                  type="datetime-local"
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Due date/time</label>
+                  <input
+                    type="datetime-local"
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Priority</label>
+                  <select
+                    value={taskPriority}
+                    onChange={(e) => setTaskPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    value={taskStatus}
+                    onChange={(e) => setTaskStatus(e.target.value as 'PENDING' | 'IN_PROGRESS' | 'COMPLETED')}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="PENDING">Pending</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Priority</label>
-                <select
-                  value={taskPriority}
-                  onChange={(e) => setTaskPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="LOW">Low</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="HIGH">High</option>
-                </select>
-              </div>
-            </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => {
@@ -423,8 +492,8 @@ export default function CaregiverDashboardPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!taskPatientId || !taskTitle || !taskDueDate) {
-                    setTaskError('Patient, title, and due date are required.');
+                  if (!taskTitle || !taskDueDate) {
+                    setTaskError('Title and due date are required.');
                     return;
                   }
                   setCreatingTask(true);
@@ -439,7 +508,8 @@ export default function CaregiverDashboardPage() {
                         title: taskTitle,
                         description: taskDescription,
                         dueDate: taskDueDate,
-                        priority: taskPriority
+                        priority: taskPriority,
+                        status: taskStatus
                       })
                     });
                     if (!res.ok) {
@@ -453,18 +523,227 @@ export default function CaregiverDashboardPage() {
                     setTaskDueDate('');
                     setTaskPatientId('');
                     setTaskPriority('MEDIUM');
+                    setTaskStatus('PENDING');
                   } catch (err: any) {
                     setTaskError(err?.message || 'Failed to create task');
                   } finally {
                     setCreatingTask(false);
                   }
                 }}
-                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
-                disabled={creatingTask}
+               className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
+               disabled={creatingTask}
+             >
+               {creatingTask ? 'Saving...' : 'Create Task'}
+             </button>
+           </div>
+         </div>
+       </div>
+      )}
+      {selectedTask && (
+        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Task Details</h3>
+              <button
+                onClick={() => setSelectedTask(null)}
+                className="text-gray-500 hover:text-gray-800"
               >
-                {creatingTask ? 'Saving...' : 'Create Task'}
+                ✕
               </button>
             </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Title</label>
+              <input
+                value={selectedTask.title}
+                onChange={(e) => setSelectedTask({ ...selectedTask, title: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Description</label>
+              <textarea
+                value={selectedTask.description}
+                onChange={(e) => setSelectedTask({ ...selectedTask, description: e.target.value })}
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Due date/time</label>
+                <input
+                  type="datetime-local"
+                  value={selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''}
+                  onChange={(e) => setSelectedTask({ ...selectedTask, dueDate: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Priority</label>
+                <select
+                  value={selectedTask.priority}
+                  onChange={(e) => setSelectedTask({ ...selectedTask, priority: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Status</label>
+              <select
+                value={selectedTask.status || 'PENDING'}
+                onChange={(e) => setSelectedTask({ ...selectedTask, status: e.target.value as 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="PENDING">Pending</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="COMPLETED">Completed</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setSelectedTask(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!selectedTask) return;
+                  setSavingTask(true);
+                  setEditError('');
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/api/tasks/${selectedTask._id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: selectedTask.title,
+                        description: selectedTask.description,
+                        dueDate: selectedTask.dueDate,
+                        priority: selectedTask.priority,
+                        status: selectedTask.status || 'PENDING'
+                      })
+                    });
+                    if (res.status === 404) {
+                      await fetchTasksForCaregiver();
+                      setSelectedTask(null);
+                      return;
+                    }
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => null);
+                      throw new Error(data?.error || 'Failed to update task');
+                    }
+                    const updated = await res.json();
+                    const updatedId = updated._id?.toString ? updated._id.toString() : updated._id;
+                    setTasks((prev) =>
+                      prev.map((t) => (t._id === updatedId ? { ...t, ...updated, _id: updatedId } : t))
+                    );
+                    await fetchTasksForCaregiver();
+                    setSelectedTask(null);
+                  } catch (err: any) {
+                    setEditError(err?.message || 'Failed to update task');
+                  } finally {
+                    setSavingTask(false);
+                  }
+                }}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                {savingTask ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            {editError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {editError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {showStatusModal && pendingStatusUpdate && (
+        <div className="fixed inset-0 bg-black/50 z-30 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Update Task Status</h3>
+            <p className="text-sm text-gray-600">
+              Move this task to <span className="font-semibold">{pendingStatusUpdate.targetStatus.replace('_', ' ')}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowStatusModal(false);
+                  setPendingStatusUpdate(null);
+                  setStatusError('');
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!pendingStatusUpdate) return;
+                  setUpdatingStatus(true);
+                  setStatusError('');
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/api/tasks/${pendingStatusUpdate.taskId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        status: pendingStatusUpdate.targetStatus
+                      })
+                    });
+                    if (res.status === 404) {
+                      // Task not found; refresh list and close
+                      await fetchTasksForCaregiver();
+                      setShowStatusModal(false);
+                      setPendingStatusUpdate(null);
+                      return;
+                    }
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => null);
+                      throw new Error(data?.error || 'Failed to update task');
+                    }
+                    const updated = await res.json();
+                    const updatedId = updated._id?.toString ? updated._id.toString() : updated._id;
+                    setTasks((prev) =>
+                      prev.map((t) =>
+                        t._id === updatedId
+                          ? {
+                              ...t,
+                              status: pendingStatusUpdate.targetStatus,
+                              completed: updated?.completed,
+                              dueDate: updated?.dueDate,
+                              priority: updated?.priority || t.priority,
+                              _id: updatedId
+                            }
+                          : t
+                      )
+                    );
+                    await fetchTasksForCaregiver();
+                    setShowStatusModal(false);
+                    setPendingStatusUpdate(null);
+                  } catch (err: any) {
+                    setStatusError(err?.message || 'Failed to update task');
+                  } finally {
+                    setUpdatingStatus(false);
+                  }
+                }}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                {updatingStatus ? 'Updating...' : 'Update'}
+              </button>
+            </div>
+            {statusError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {statusError}
+              </div>
+            )}
           </div>
         </div>
       )}

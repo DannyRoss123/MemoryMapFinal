@@ -225,65 +225,73 @@ const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
                             })}
                           </p>
                         </div>
-                        <button
-                          onClick={async () => {
-                            setSelectedPatient(patient);
-                            setLoadingDetail(true);
-                            setDetailError("");
-                            setPatientDetail(null);
-                            try {
-                              const res = await fetch(`${API_BASE_URL}/api/patients/${patient._id}/dashboard`);
-                              if (!res.ok) {
-                                const data = await res.json().catch(() => null);
-                                throw new Error(data?.error || "Failed to load details");
-                              }
-                              const data = await res.json();
-                              setPatientDetail({
-                                patient: {
-                                  _id: data.patient._id,
-                                  name: data.patient.name,
-                                  email: data.patient.email,
-                                  location: data.patient.location,
-                                  createdAt: data.patient.createdAt
-                                },
-                                memories: data.memories?.recent || [],
-                                journal: data.journal?.recent || [],
-                                mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
-                                tasks: (data.tasks?.recent || []).map((t: any) => ({
-                                  ...t,
-                                  _id: t._id?.toString ? t._id.toString() : t._id
-                                }))
-                              });
-                              setPredictedMood(null);
-                              const latestMood = data.mood?.recent?.[0]?.mood;
-                              if (latestMood) {
-                                const moodRes = await fetch(`${API_BASE_URL}/api/mood/predict-shift`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    patientId: patient._id,
-                                    selectedMood: latestMood
-                                  })
-                                });
-                                if (moodRes.ok) {
-                                  const moodData = await moodRes.json();
-                                  setPredictedMood({
-                                    predictedMood: moodData.predictedMood,
-                                    shift: moodData.shift,
-                                    rationale: moodData.rationale
-                                  });
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={async () => {
+                              setSelectedPatient(patient);
+                              setLoadingDetail(true);
+                              setDetailError("");
+                              setPatientDetail(null);
+                              try {
+                                const res = await fetch(`${API_BASE_URL}/api/patients/${patient._id}/dashboard`);
+                                if (!res.ok) {
+                                  const data = await res.json().catch(() => null);
+                                  throw new Error(data?.error || "Failed to load details");
                                 }
+                                const data = await res.json();
+                                setPatientDetail({
+                                  patient: {
+                                    _id: data.patient._id,
+                                    name: data.patient.name,
+                                    email: data.patient.email,
+                                    location: data.patient.location,
+                                    createdAt: data.patient.createdAt
+                                  },
+                                  memories: data.memories?.recent || [],
+                                  journal: data.journal?.recent || [],
+                                  mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
+                                  tasks: (data.tasks?.recent || []).map((t: any) => ({
+                                    ...t,
+                                    _id: t._id?.toString ? t._id.toString() : t._id
+                                  }))
+                                });
+                                setPredictedMood(null);
+                                const latestMood = data.mood?.recent?.[0]?.mood;
+                                if (latestMood) {
+                                  const moodRes = await fetch(`${API_BASE_URL}/api/mood/predict-shift`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      patientId: patient._id,
+                                      selectedMood: latestMood
+                                    })
+                                  });
+                                  if (moodRes.ok) {
+                                    const moodData = await moodRes.json();
+                                    setPredictedMood({
+                                      predictedMood: moodData.predictedMood,
+                                      shift: moodData.shift,
+                                      rationale: moodData.rationale
+                                    });
+                                  }
+                                }
+                              } catch (err: any) {
+                                setDetailError(err?.message || "Failed to load details");
+                              } finally {
+                                setLoadingDetail(false);
                               }
-                            } catch (err: any) {
-                              setDetailError(err?.message || "Failed to load details");
-                            } finally {
-                              setLoadingDetail(false);
-                            }
-                          }}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-                        >
-                          View Details
-                        </button>
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => router.push(`/caregiver/patients/${patient._id}/contacts`)}
+                            className="px-4 py-2 border border-gray-300 text-gray-800 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+                          >
+                            View Contacts
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

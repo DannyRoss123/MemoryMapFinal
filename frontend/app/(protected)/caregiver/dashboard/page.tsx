@@ -117,7 +117,8 @@ export default function CaregiverDashboardPage() {
       const res = await fetch(`${API_BASE_URL}/api/tasks?caregiverId=${user.userId}`);
       if (res.ok) {
         const data = await res.json();
-        const mapped = (data || []).map((t: any) => ({
+        const filtered = (data || []).filter((t: any) => !t.patientId); // caregiver-only tasks
+        const mapped = filtered.map((t: any) => ({
           ...t,
           _id: t._id?.toString ? t._id.toString() : t._id,
           status: t.status || (t.completed ? 'COMPLETED' : 'PENDING')

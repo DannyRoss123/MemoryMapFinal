@@ -33,14 +33,15 @@ export default function CaregiverPatientsPage() {
   const [patientDetail, setPatientDetail] = useState<PatientDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState("");
-  const [predictedMood, setPredictedMood] = useState<{ predictedMood: string; shift: string; rationale: string } | null>(null);
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskDue, setNewTaskDue] = useState("");
-  const [newTaskStatus, setNewTaskStatus] = useState<'PENDING' | 'COMPLETED'>('PENDING');
-  const [creatingTask, setCreatingTask] = useState(false);
-  const [taskError, setTaskError] = useState("");
+const [predictedMood, setPredictedMood] = useState<{ predictedMood: string; shift: string; rationale: string } | null>(null);
+const [showTaskModal, setShowTaskModal] = useState(false);
+const [newTaskTitle, setNewTaskTitle] = useState("");
+const [newTaskDescription, setNewTaskDescription] = useState("");
+const [newTaskDue, setNewTaskDue] = useState("");
+const [newTaskStatus, setNewTaskStatus] = useState<'PENDING' | 'COMPLETED'>('PENDING');
+const [creatingTask, setCreatingTask] = useState(false);
+const [taskError, setTaskError] = useState("");
+const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== 'CAREGIVER')) {
@@ -248,7 +249,10 @@ export default function CaregiverPatientsPage() {
                                 memories: data.memories?.recent || [],
                                 journal: data.journal?.recent || [],
                                 mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
-                                tasks: data.tasks?.recent || []
+                                tasks: (data.tasks?.recent || []).map((t: any) => ({
+                                  ...t,
+                                  _id: t._id?.toString ? t._id.toString() : t._id
+                                }))
                               });
                               setPredictedMood(null);
                               const latestMood = data.mood?.recent?.[0]?.mood;
@@ -416,13 +420,77 @@ export default function CaregiverPatientsPage() {
                               readOnly
                               className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded"
                             />
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className={`text-sm font-semibold ${t.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                                 {t.title}
                               </p>
                               <p className="text-xs text-gray-500">
                                 {t.dueDate ? new Date(t.dueDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Today'}
                               </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                className="text-gray-500 hover:text-blue-600"
+                                onClick={async () => {
+                                  setShowTaskModal(true);
+                                  setTaskError("");
+                                  setNewTaskTitle(t.title || '');
+                                  setNewTaskDescription(t.description || '');
+                                  setNewTaskDue(t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 16) : '');
+                                  setNewTaskStatus(t.completed ? 'COMPLETED' : 'PENDING');
+                                  // reuse modal for editing by pre-filling; store task id
+                                  const tid = t?._id;
+                                  setEditingTaskId(
+                                    typeof tid === 'string'
+                                      ? tid
+                                      : tid?.toString
+                                      ? tid.toString()
+                                      : tid
+                                      ? `${tid}`
+                                      : null
+                                  );
+                                }}
+                                title="Edit task"
+                              >
+                                ✎
+                              </button>
+                              <button
+                                className="text-gray-500 hover:text-red-600"
+                                onClick={async () => {
+                                  if (!selectedPatient) return;
+                                  try {
+                                    const res = await fetch(`${API_BASE_URL}/api/tasks/${t._id}`, {
+                                      method: 'DELETE'
+                                    });
+                                    if (!res.ok) {
+                                      const data = await res.json().catch(() => null);
+                                      throw new Error(data?.error || 'Failed to delete task');
+                                    }
+                                    const detailRes = await fetch(`${API_BASE_URL}/api/patients/${selectedPatient._id}/dashboard`);
+                                    if (detailRes.ok) {
+                                      const data = await detailRes.json();
+                                      setPatientDetail({
+                                        patient: {
+                                          _id: data.patient._id,
+                                          name: data.patient.name,
+                                          email: data.patient.email,
+                                          location: data.patient.location,
+                                          createdAt: data.patient.createdAt
+                                        },
+                                        memories: data.memories?.recent || [],
+                                        journal: data.journal?.recent || [],
+                                        mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
+                                        tasks: data.tasks?.recent || []
+                                      });
+                                    }
+                                  } catch (err: any) {
+                                    setTaskError(err?.message || 'Failed to delete task');
+                                  }
+                                }}
+                                title="Delete task"
+                              >
+                                🗑
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -435,6 +503,11 @@ export default function CaregiverPatientsPage() {
                       onClick={() => {
                         setShowTaskModal(true);
                         setTaskError("");
+                        setEditingTaskId(null);
+                        setNewTaskTitle("");
+                        setNewTaskDescription("");
+                        setNewTaskDue("");
+                        setNewTaskStatus('PENDING');
                       }}
                     >
                       Add Task
@@ -450,9 +523,19 @@ export default function CaregiverPatientsPage() {
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center px-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Add Task for {selectedPatient.name}</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {editingTaskId ? "Edit Task" : `Add Task for ${selectedPatient.name}`}
+              </h3>
               <button
-                onClick={() => setShowTaskModal(false)}
+                onClick={() => {
+                  setShowTaskModal(false);
+                  setEditingTaskId(null);
+                  setTaskError("");
+                  setNewTaskTitle("");
+                  setNewTaskDescription("");
+                  setNewTaskDue("");
+                  setNewTaskStatus("PENDING");
+                }}
                 className="text-gray-500 hover:text-gray-800"
               >
                 ✕
@@ -506,7 +589,15 @@ export default function CaregiverPatientsPage() {
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
-                onClick={() => setShowTaskModal(false)}
+                onClick={() => {
+                  setShowTaskModal(false);
+                  setEditingTaskId(null);
+                  setTaskError("");
+                  setNewTaskTitle("");
+                  setNewTaskDescription("");
+                  setNewTaskDue("");
+                  setNewTaskStatus("PENDING");
+                }}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                 disabled={creatingTask}
               >
@@ -518,25 +609,59 @@ export default function CaregiverPatientsPage() {
                     setTaskError("Title and due date are required.");
                     return;
                   }
+                  if (editingTaskId && typeof editingTaskId !== 'string') {
+                    setTaskError("Task id is invalid. Please close and reopen the patient details, then try again.");
+                    return;
+                  }
                   setCreatingTask(true);
                   setTaskError("");
                   try {
-                    const res = await fetch(`${API_BASE_URL}/api/tasks`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        patientId: selectedPatient._id,
-                        caregiverId: user?.userId,
-                        title: newTaskTitle,
-                        description: newTaskDescription,
-                        dueDate: newTaskDue,
-                        priority: 'MEDIUM',
-                        status: newTaskStatus
-                      })
-                    });
+                    const isEdit = !!editingTaskId;
+                    const res = await fetch(
+                      isEdit ? `${API_BASE_URL}/api/tasks/${editingTaskId}` : `${API_BASE_URL}/api/tasks`,
+                      {
+                        method: isEdit ? 'PATCH' : 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          patientId: selectedPatient._id,
+                          caregiverId: user?.userId,
+                          title: newTaskTitle,
+                          description: newTaskDescription,
+                          dueDate: newTaskDue,
+                          priority: 'MEDIUM',
+                          status: newTaskStatus
+                        })
+                      }
+                    );
                     if (!res.ok) {
                       const data = await res.json().catch(() => null);
-                      throw new Error(data?.error || "Failed to create task");
+                      if (res.status === 404) {
+                        // Task is stale; refresh data and close modal to avoid stuck UI
+                        const detailRes = await fetch(`${API_BASE_URL}/api/patients/${selectedPatient._id}/dashboard`);
+                        if (detailRes.ok) {
+                          const refreshed = await detailRes.json();
+                          setPatientDetail({
+                            patient: {
+                              _id: refreshed.patient._id,
+                              name: refreshed.patient.name,
+                              email: refreshed.patient.email,
+                              location: refreshed.patient.location,
+                              createdAt: refreshed.patient.createdAt
+                            },
+                            memories: refreshed.memories?.recent || [],
+                            journal: refreshed.journal?.recent || [],
+                            mood: refreshed.mood?.recent ? [refreshed.mood.recent[0]].filter(Boolean) : [],
+                            tasks: (refreshed.tasks?.recent || []).map((t: any) => ({
+                              ...t,
+                              _id: t._id?.toString ? t._id.toString() : t._id
+                            }))
+                          });
+                        }
+                        setShowTaskModal(false);
+                        setEditingTaskId(null);
+                        throw new Error("Task not found. It may have been deleted. Tasks have been refreshed.");
+                      }
+                      throw new Error(data?.error || (isEdit ? "Failed to update task" : "Failed to create task"));
                     }
                     // Refresh detail panel
                     setShowTaskModal(false);
@@ -544,6 +669,7 @@ export default function CaregiverPatientsPage() {
                     setNewTaskDescription("");
                     setNewTaskDue("");
                     setNewTaskStatus('PENDING');
+                    setEditingTaskId(null);
                     // refetch dashboard details
                     const detailRes = await fetch(`${API_BASE_URL}/api/patients/${selectedPatient._id}/dashboard`);
                     if (detailRes.ok) {
@@ -559,7 +685,10 @@ export default function CaregiverPatientsPage() {
                         memories: data.memories?.recent || [],
                         journal: data.journal?.recent || [],
                         mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
-                        tasks: data.tasks?.recent || []
+                        tasks: (data.tasks?.recent || []).map((t: any) => ({
+                          ...t,
+                          _id: t._id?.toString ? t._id.toString() : t._id
+                        }))
                       });
                     }
                   } catch (err: any) {
@@ -571,7 +700,7 @@ export default function CaregiverPatientsPage() {
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
                 disabled={creatingTask}
               >
-                {creatingTask ? "Saving..." : "Create Task"}
+                {creatingTask ? "Saving..." : editingTaskId ? "Save Task" : "Create Task"}
               </button>
             </div>
           </div>

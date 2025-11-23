@@ -13,6 +13,7 @@ export default function CaregiverSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [hasPendingFile, setHasPendingFile] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -58,6 +59,8 @@ export default function CaregiverSettingsPage() {
         setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
+      setHasPendingFile(true);
+      setMessage(null);
     }
   };
 
@@ -102,7 +105,11 @@ export default function CaregiverSettingsPage() {
       const resolved = imageUrl.startsWith('http') ? imageUrl : `${API_BASE_URL}${imageUrl}`;
       setProfilePicture(imageUrl);
       setPreviewUrl(resolved);
+      setHasPendingFile(false);
       setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (error: any) {
       console.error('Error uploading profile picture:', error);
       setMessage({ type: 'error', text: error?.message || 'An error occurred while uploading' });
@@ -214,16 +221,16 @@ export default function CaregiverSettingsPage() {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     disabled={uploading}
                   >
-                    Choose File
+                    {uploading ? 'Uploading...' : previewUrl ? 'Replace Image' : 'Choose Image'}
                   </button>
 
-                  {previewUrl && fileInputRef.current?.files?.[0] && (
+                  {hasPendingFile && previewUrl && (
                     <button
                       onClick={handleUpload}
                       className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
                       disabled={uploading}
                     >
-                      {uploading ? 'Uploading...' : 'Save Picture'}
+                      {uploading ? 'Saving...' : 'Save Picture'}
                     </button>
                   )}
 

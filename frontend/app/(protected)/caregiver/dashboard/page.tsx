@@ -24,11 +24,11 @@ interface ActivityItem {
 }
 
 interface Task {
-  id: string;
+  _id: string;
   title: string;
   description: string;
-  priority: 'critical' | 'warning' | 'info';
-  actionLabel: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  dueDate?: string;
 }
 
 export default function CaregiverDashboardPage() {
@@ -44,6 +44,14 @@ export default function CaregiverDashboardPage() {
     unreadMessages: 0,
     tasksDueToday: 0
   });
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskPatientId, setTaskPatientId] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskPriority, setTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskError, setTaskError] = useState('');
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== 'CAREGIVER')) {
@@ -78,88 +86,43 @@ export default function CaregiverDashboardPage() {
 
     if (user?.userId && user?.role === 'CAREGIVER') {
       fetchAssignedPatients();
-      loadMockData();
+      fetchTasksForCaregiver();
     }
   }, [user]);
 
-  const loadMockData = () => {
-    // Mock tasks
-    setTasks([
-      {
-        id: '1',
-        title: 'Check in on patients with no activity logged today',
-        description: 'Review patient engagement and reach out to those who may need support',
-        priority: 'critical',
-        actionLabel: 'Review Patients'
-      },
-      {
-        id: '2',
-        title: 'Celebrate wins with a quick message to family',
-        description: 'Share positive updates and milestones with loved ones',
-        priority: 'warning',
-        actionLabel: 'Message Family'
-      },
-      {
-        id: '3',
-        title: 'Update care plans when routines change',
-        description: 'Review and adjust care protocols based on recent observations',
-        priority: 'info',
-        actionLabel: 'Update Plans'
+  const fetchTasksForCaregiver = async () => {
+    if (!user?.userId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tasks?caregiverId=${user.userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data || []).slice(0, 3);
+        setTasks(mapped);
+        setStats(prev => ({
+          ...prev,
+          tasksDueToday: mapped.length,
+          tasksInProgress: mapped.filter((t: any) => !t.completed).length
+        }));
       }
-    ]);
-
-    // Mock activity feed
-    setActivityFeed([
-      {
-        id: '1',
-        type: 'mood',
-        title: 'Mood assessment logged',
-        description: "Margaret's mood recorded as positive",
-        time: '15 min'
-      },
-      {
-        id: '2',
-        type: 'message',
-        title: 'Family message received',
-        description: 'Sarah Johnson requested an update',
-        time: '1 hour'
-      },
-      {
-        id: '3',
-        type: 'memory',
-        title: 'Memory shared',
-        description: 'Photo from family gathering uploaded',
-        time: '2 hours'
-      },
-      {
-        id: '4',
-        type: 'routine',
-        title: 'Daily routine completed',
-        description: 'Morning medications administered',
-        time: '3 hours'
-      }
-    ]);
-
-    setStats(prev => ({
-      ...prev,
-      tasksDueToday: 3
-    }));
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'border-l-4 border-red-500 bg-red-50';
-      case 'warning': return 'border-l-4 border-yellow-500 bg-yellow-50';
-      case 'info': return 'border-l-4 border-blue-500 bg-blue-50';
+      case 'HIGH': return 'border-l-4 border-red-500 bg-red-50';
+      case 'MEDIUM': return 'border-l-4 border-yellow-500 bg-yellow-50';
+      case 'LOW': return 'border-l-4 border-blue-500 bg-blue-50';
       default: return 'border-l-4 border-gray-300';
     }
   };
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
-      case 'critical': return <span className="px-2 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded">Critical</span>;
-      case 'warning': return <span className="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-700 rounded">Warning</span>;
-      case 'info': return <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded">Info</span>;
+      case 'HIGH': return <span className="px-2 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded">High</span>;
+      case 'MEDIUM': return <span className="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-700 rounded">Medium</span>;
+      case 'LOW': return <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded">Low</span>;
       default: return null;
     }
   };
@@ -201,7 +164,10 @@ export default function CaregiverDashboardPage() {
                   </span>
                 )}
               </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+                onClick={() => setShowTaskModal(true)}
+              >
                 + New Task
               </button>
               <button
@@ -305,20 +271,26 @@ export default function CaregiverDashboardPage() {
               </div>
 
               <div className="space-y-4">
-                {tasks.map((task) => (
-                  <div key={task.id} className={`rounded-lg p-4 ${getPriorityColor(task.priority)}`}>
+                {tasks.length === 0 ? (
+                  <div className="text-gray-500 text-sm">No tasks yet. Add one to get started.</div>
+                ) : (
+                  tasks.map((task) => (
+                    <div key={task._id} className={`rounded-lg p-4 ${getPriorityColor(task.priority)}`}>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         {getPriorityBadge(task.priority)}
                         <h4 className="font-semibold text-gray-900 mt-2">{task.title}</h4>
                         <p className="text-sm text-gray-600 mt-1">{task.description}</p>
+                        {task.dueDate && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Due {new Date(task.dueDate).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <button className="mt-3 px-4 py-2 bg-white text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition border border-blue-200">
-                      {task.actionLabel}
-                    </button>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
 
               <button className="w-full mt-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">
@@ -361,6 +333,141 @@ export default function CaregiverDashboardPage() {
           </div>
         </main>
       </div>
+      {showTaskModal && (
+        <div className="fixed inset-0 bg-black/50 z-30 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Task</h3>
+              <button
+                onClick={() => {
+                  setShowTaskModal(false);
+                  setTaskError('');
+                }}
+                className="text-gray-500 hover:text-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+            {taskError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {taskError}
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Patient</label>
+              <select
+                value={taskPatientId}
+                onChange={(e) => setTaskPatientId(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select a patient</option>
+                {patients.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Title</label>
+              <input
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Task title"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Description</label>
+              <textarea
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Add details"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Due date/time</label>
+                <input
+                  type="datetime-local"
+                  value={taskDueDate}
+                  onChange={(e) => setTaskDueDate(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Priority</label>
+                <select
+                  value={taskPriority}
+                  onChange={(e) => setTaskPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowTaskModal(false);
+                  setTaskError('');
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                disabled={creatingTask}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!taskPatientId || !taskTitle || !taskDueDate) {
+                    setTaskError('Patient, title, and due date are required.');
+                    return;
+                  }
+                  setCreatingTask(true);
+                  setTaskError('');
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        patientId: taskPatientId,
+                        caregiverId: user?.userId,
+                        title: taskTitle,
+                        description: taskDescription,
+                        dueDate: taskDueDate,
+                        priority: taskPriority
+                      })
+                    });
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => null);
+                      throw new Error(data?.error || 'Failed to create task');
+                    }
+                    await fetchTasksForCaregiver();
+                    setShowTaskModal(false);
+                    setTaskTitle('');
+                    setTaskDescription('');
+                    setTaskDueDate('');
+                    setTaskPatientId('');
+                    setTaskPriority('MEDIUM');
+                  } catch (err: any) {
+                    setTaskError(err?.message || 'Failed to create task');
+                  } finally {
+                    setCreatingTask(false);
+                  }
+                }}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
+                disabled={creatingTask}
+              >
+                {creatingTask ? 'Saving...' : 'Create Task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </CaregiverLayout>
   );
 }

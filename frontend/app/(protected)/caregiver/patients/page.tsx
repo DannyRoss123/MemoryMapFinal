@@ -15,12 +15,32 @@ interface Patient {
   createdAt: string;
 }
 
+interface PatientDetail {
+  patient: Patient;
+  memories?: any[];
+  journal?: any[];
+  mood?: { mood: string; date?: string; notes?: string }[];
+  tasks?: any[];
+}
+
 export default function CaregiverPatientsPage() {
   const router = useRouter();
   const { user, isLoading } = useUser();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [patientDetail, setPatientDetail] = useState<PatientDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [predictedMood, setPredictedMood] = useState<{ predictedMood: string; shift: string; rationale: string } | null>(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [newTaskDue, setNewTaskDue] = useState("");
+  const [newTaskStatus, setNewTaskStatus] = useState<'PENDING' | 'COMPLETED'>('PENDING');
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskError, setTaskError] = useState("");
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== 'CAREGIVER')) {
@@ -71,6 +91,7 @@ export default function CaregiverPatientsPage() {
   }
 
   return (
+    <>
     <CaregiverLayout>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -162,10 +183,9 @@ export default function CaregiverPatientsPage() {
               <div className="divide-y divide-gray-200">
                 {filteredPatients.map((patient) => (
                   <div
-                    key={patient._id}
-                    className="p-6 hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => router.push(`/caregiver/patients/${patient._id}`)}
-                  >
+                  key={patient._id}
+                  className="p-6 hover:bg-gray-50 transition-colors"
+                >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4 flex-1">
                         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
@@ -205,9 +225,56 @@ export default function CaregiverPatientsPage() {
                           </p>
                         </div>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/caregiver/patients/${patient._id}`);
+                          onClick={async () => {
+                            setSelectedPatient(patient);
+                            setLoadingDetail(true);
+                            setDetailError("");
+                            setPatientDetail(null);
+                            try {
+                              const res = await fetch(`${API_BASE_URL}/api/patients/${patient._id}/dashboard`);
+                              if (!res.ok) {
+                                const data = await res.json().catch(() => null);
+                                throw new Error(data?.error || "Failed to load details");
+                              }
+                              const data = await res.json();
+                              setPatientDetail({
+                                patient: {
+                                  _id: data.patient._id,
+                                  name: data.patient.name,
+                                  email: data.patient.email,
+                                  location: data.patient.location,
+                                  createdAt: data.patient.createdAt
+                                },
+                                memories: data.memories?.recent || [],
+                                journal: data.journal?.recent || [],
+                                mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
+                                tasks: data.tasks?.recent || []
+                              });
+                              setPredictedMood(null);
+                              const latestMood = data.mood?.recent?.[0]?.mood;
+                              if (latestMood) {
+                                const moodRes = await fetch(`${API_BASE_URL}/api/mood/predict-shift`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    patientId: patient._id,
+                                    selectedMood: latestMood
+                                  })
+                                });
+                                if (moodRes.ok) {
+                                  const moodData = await moodRes.json();
+                                  setPredictedMood({
+                                    predictedMood: moodData.predictedMood,
+                                    shift: moodData.shift,
+                                    rationale: moodData.rationale
+                                  });
+                                }
+                              }
+                            } catch (err: any) {
+                              setDetailError(err?.message || "Failed to load details");
+                            } finally {
+                              setLoadingDetail(false);
+                            }
                           }}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
                         >
@@ -223,5 +290,293 @@ export default function CaregiverPatientsPage() {
         </main>
       </div>
     </CaregiverLayout>
+      {selectedPatient && (
+        <div className="fixed inset-0 bg-black/50 z-30 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-5xl max-h-[90vh] overflow-hidden flex">
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">{patientDetail?.patient.name || selectedPatient.name}</h3>
+                  <p className="text-sm text-gray-600">{patientDetail?.patient.email || selectedPatient.email || 'No email'}</p>
+                  <p className="text-sm text-gray-600">{patientDetail?.patient.location || selectedPatient.location || 'No location'}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedPatient(null);
+                    setPatientDetail(null);
+                    setDetailError("");
+                  }}
+                  className="text-gray-500 hover:text-gray-800"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {detailError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+                  {detailError}
+                </div>
+              )}
+              {loadingDetail && <div className="text-sm text-gray-500">Loading details...</div>}
+
+              {patientDetail && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Recent Memories</h4>
+                    {patientDetail.memories && patientDetail.memories.length > 0 ? (
+                      <div className="space-y-3">
+                        {patientDetail.memories.map((m: any) => (
+                          <div key={m._id} className="flex items-center space-x-3 border border-gray-200 rounded-lg p-3">
+                            <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                              {m.type === 'VIDEO' ? (
+                                <div className="w-full h-full bg-black text-white flex items-center justify-center text-xs">Video</div>
+                              ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={m.url?.startsWith('http') ? m.url : `${API_BASE_URL}${m.url}`} alt={m.title || 'Memory'} className="w-full h-full object-cover" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{m.title || 'Memory'}</p>
+                              <p className="text-xs text-gray-500">
+                                {m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ''}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No memories yet.</p>
+                    )}
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Recent Journal Entries</h4>
+                    {patientDetail.journal && patientDetail.journal.length > 0 ? (
+                      <div className="space-y-3">
+                        {patientDetail.journal.map((j: any) => (
+                          <div key={j._id} className="border border-gray-200 rounded-lg p-3">
+                            <p className="text-sm font-semibold text-gray-900 mb-1">{j.title || 'Journal entry'}</p>
+                            <p className="text-xs text-gray-500 mb-2">
+                              {j.date ? new Date(j.date).toLocaleDateString() : ''}
+                            </p>
+                            <p className="text-sm text-gray-700 line-clamp-2">{j.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No journal entries yet.</p>
+                    )}
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-3">Latest Mood</h4>
+                      {patientDetail.mood && patientDetail.mood.length > 0 ? (
+                        <div className="space-y-2">
+                          {patientDetail.mood.map((m: any) => (
+                            <div key={m._id} className="border border-gray-200 rounded-lg p-3">
+                              <p className="text-sm font-semibold text-gray-900">
+                                {m.mood || 'Mood'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {m.date ? new Date(m.date).toLocaleDateString() : ''}
+                              </p>
+                              {m.notes && <p className="text-sm text-gray-700 mt-1 line-clamp-2">{m.notes}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No mood entries yet.</p>
+                      )}
+                    </div>
+                    {predictedMood && (
+                      <div className="border border-blue-100 bg-blue-50 rounded-lg p-3">
+                        <p className="text-sm font-semibold text-blue-900">
+                          Predicted Mood: {predictedMood.predictedMood} ({predictedMood.shift})
+                        </p>
+                        <p className="text-xs text-blue-800 mt-1">{predictedMood.rationale}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Today&apos;s Tasks</h4>
+                    {patientDetail.tasks && patientDetail.tasks.length > 0 ? (
+                    <div className="space-y-2">
+                      {patientDetail.tasks.map((t: any) => (
+                        <div
+                          key={t._id}
+                          className={`flex items-start space-x-3 border border-gray-200 rounded-lg p-3 ${
+                            t.completed ? 'bg-green-50' : 'bg-white'
+                          }`}
+                        >
+                            <input
+                              type="checkbox"
+                              checked={!!t.completed}
+                              readOnly
+                              className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <div className="min-w-0">
+                              <p className={`text-sm font-semibold ${t.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                {t.title}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {t.dueDate ? new Date(t.dueDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Today'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No tasks scheduled today.</p>
+                    )}
+                    <button
+                      className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                      onClick={() => {
+                        setShowTaskModal(true);
+                        setTaskError("");
+                      }}
+                    >
+                      Add Task
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {showTaskModal && selectedPatient && (
+        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Add Task for {selectedPatient.name}</h3>
+              <button
+                onClick={() => setShowTaskModal(false)}
+                className="text-gray-500 hover:text-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+            {taskError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {taskError}
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Task Name</label>
+              <input
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Task title"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Details</label>
+              <textarea
+                value={newTaskDescription}
+                onChange={(e) => setNewTaskDescription(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Add details"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Due date/time</label>
+                <input
+                  type="datetime-local"
+                  value={newTaskDue}
+                  onChange={(e) => setNewTaskDue(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Status</label>
+                <select
+                  value={newTaskStatus}
+                  onChange={(e) => setNewTaskStatus(e.target.value as 'PENDING' | 'COMPLETED')}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="PENDING">Pending</option>
+                  <option value="COMPLETED">Completed</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowTaskModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                disabled={creatingTask}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!newTaskTitle || !newTaskDue || !selectedPatient) {
+                    setTaskError("Title and due date are required.");
+                    return;
+                  }
+                  setCreatingTask(true);
+                  setTaskError("");
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        patientId: selectedPatient._id,
+                        caregiverId: user?.userId,
+                        title: newTaskTitle,
+                        description: newTaskDescription,
+                        dueDate: newTaskDue,
+                        priority: 'MEDIUM',
+                        status: newTaskStatus
+                      })
+                    });
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => null);
+                      throw new Error(data?.error || "Failed to create task");
+                    }
+                    // Refresh detail panel
+                    setShowTaskModal(false);
+                    setNewTaskTitle("");
+                    setNewTaskDescription("");
+                    setNewTaskDue("");
+                    setNewTaskStatus('PENDING');
+                    // refetch dashboard details
+                    const detailRes = await fetch(`${API_BASE_URL}/api/patients/${selectedPatient._id}/dashboard`);
+                    if (detailRes.ok) {
+                      const data = await detailRes.json();
+                      setPatientDetail({
+                        patient: {
+                          _id: data.patient._id,
+                          name: data.patient.name,
+                          email: data.patient.email,
+                          location: data.patient.location,
+                          createdAt: data.patient.createdAt
+                        },
+                        memories: data.memories?.recent || [],
+                        journal: data.journal?.recent || [],
+                        mood: data.mood?.recent ? [data.mood.recent[0]].filter(Boolean) : [],
+                        tasks: data.tasks?.recent || []
+                      });
+                    }
+                  } catch (err: any) {
+                    setTaskError(err?.message || "Failed to create task");
+                  } finally {
+                    setCreatingTask(false);
+                  }
+                }}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
+                disabled={creatingTask}
+              >
+                {creatingTask ? "Saving..." : "Create Task"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

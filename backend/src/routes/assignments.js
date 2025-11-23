@@ -197,13 +197,39 @@ assignmentsRouter.get('/caregiver/:caregiverId/patients', async (req, res) => {
       return res.status(404).json({ error: 'Caregiver not found' });
     }
 
-    // Get all patients assigned to this caregiver
+    // Get all patients assigned to this caregiver with recent memories, journal entries, and latest mood
     const patients = await users
-      .find({
-        caregiverId: caregiverObjectId,
-        role: 'PATIENT'
-      })
-      .sort({ name: 1 })
+      .aggregate([
+        { $match: { caregiverId: caregiverObjectId, role: 'PATIENT' } },
+        {
+          $lookup: {
+            from: Collections.MEMORIES,
+            localField: '_id',
+            foreignField: 'patientId',
+            as: 'memories',
+            pipeline: [{ $sort: { createdAt: -1 } }, { $limit: 3 }]
+          }
+        },
+        {
+          $lookup: {
+            from: Collections.JOURNAL_ENTRIES,
+            localField: '_id',
+            foreignField: 'patientId',
+            as: 'journal',
+            pipeline: [{ $sort: { date: -1 } }, { $limit: 3 }]
+          }
+        },
+        {
+          $lookup: {
+            from: Collections.MOOD_ENTRIES,
+            localField: '_id',
+            foreignField: 'patientId',
+            as: 'mood',
+            pipeline: [{ $sort: { date: -1 } }, { $limit: 1 }]
+          }
+        },
+        { $sort: { name: 1 } }
+      ])
       .toArray();
 
     res.json(patients);

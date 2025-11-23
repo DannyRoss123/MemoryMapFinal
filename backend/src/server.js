@@ -30,6 +30,7 @@ import { caregiversRouter } from './routes/caregivers.js';
 import { uploadRouter } from './routes/upload.js';
 import { contactsRouter } from './routes/contacts.js';
 import { assignmentsRouter } from './routes/assignments.js';
+import { usersRouter } from './routes/users.js';
 
 const app = express();
 const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map((origin) => origin.trim()).filter(Boolean);
@@ -55,6 +56,7 @@ app.use('/api/caregivers', caregiversRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/assignments', assignmentsRouter);
+app.use('/api/users', usersRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {

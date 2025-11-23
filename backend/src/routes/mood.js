@@ -43,6 +43,100 @@ moodRouter.get('/', async (req, res) => {
   }
 });
 
+// POST /api/mood/predict-shift - Predict mood shift using journal entries + selected mood
+// Body: { patientId, selectedMood }
+moodRouter.post('/predict-shift', async (req, res) => {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+
+    const { patientId, selectedMood } = req.body;
+    if (!patientId || !selectedMood) {
+      return res.status(400).json({ error: 'Missing required fields: patientId, selectedMood' });
+    }
+    if (!Object.values(MoodLevel).includes(selectedMood)) {
+      return res.status(400).json({ error: 'Invalid selectedMood value' });
+    }
+
+    const db = await getDb();
+    const journalEntries = db.collection(Collections.JOURNAL_ENTRIES);
+
+    // Fetch today's journal entries
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const todayJournal = await journalEntries
+      .find({
+        patientId: new ObjectId(patientId),
+        date: { $gte: start, $lt: end }
+      })
+      .sort({ date: -1 })
+      .limit(5)
+      .toArray();
+
+    const journalText = todayJournal
+      .map((j) => `- ${j.title || 'Entry'}: ${j.content}`)
+      .join('\n')
+      .slice(0, 4000);
+
+    const messages = [
+      {
+        role: 'system',
+        content:
+          'You are a supportive assistant that infers mood shifts. ' +
+          'Return JSON only with keys "predictedMood" (HAPPY, CALM, SAD, ANXIOUS, ANGRY, TIRED), "shift" (UP, DOWN, STABLE), and "rationale" (short text).'
+      },
+      {
+        role: 'user',
+        content: `Selected mood: ${selectedMood}\nJournal entries (today):\n${journalText || 'No journal entries.'}`
+      }
+    ];
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        messages,
+        temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.4'),
+        max_tokens: 180
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error('OpenAI mood shift error:', response.status, errorText);
+      return res.status(500).json({ error: 'Failed to predict mood shift' });
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content || '{}';
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      parsed = { predictedMood: selectedMood, shift: 'STABLE', rationale: 'Unable to parse model response.' };
+    }
+
+    res.json({
+      predictedMood: parsed.predictedMood || selectedMood,
+      shift: parsed.shift || 'STABLE',
+      rationale: parsed.rationale || 'No rationale provided.',
+      journalCount: todayJournal.length
+    });
+  } catch (error) {
+    console.error('Error predicting mood shift:', error);
+    res.status(500).json({ error: 'Failed to predict mood shift' });
+  }
+});
+
 // GET /api/mood/patient/:patientId/today - Get today's mood entry for a patient
 moodRouter.get('/patient/:patientId/today', async (req, res) => {
   try {

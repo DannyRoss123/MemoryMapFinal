@@ -262,9 +262,20 @@ export default function HomePage() {
                   {/* Assigned Caregiver */}
                   {assignedCaregiver && (
                     <div className="flex items-start space-x-3 pb-4 border-b border-gray-100">
-                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold flex-shrink-0">
-                        {assignedCaregiver.name?.charAt(0)}
-                      </div>
+                      {assignedCaregiver.profilePicture ? (
+                        <img
+                          src={assignedCaregiver.profilePicture.startsWith('http')
+                            ? assignedCaregiver.profilePicture
+                            : `${API_BASE_URL}${assignedCaregiver.profilePicture}`
+                          }
+                          alt={assignedCaregiver.name}
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-green-200"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold flex-shrink-0">
+                          {assignedCaregiver.name?.charAt(0)}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-900">{assignedCaregiver.name}</p>

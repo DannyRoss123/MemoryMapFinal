@@ -11,12 +11,6 @@ const patientLinks = [
   { label: 'Tasks', href: '/patient/tasks' }
 ];
 
-const caregiverLinks = [
-  { label: 'Dashboard', href: '/caregiver/dashboard' },
-  { label: 'Patients', href: '/caregiver/patients' },
-  { label: 'Tasks', href: '/caregiver/tasks' }
-];
-
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout, login } = useUser();
   const router = useRouter();
@@ -44,8 +38,14 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     return null;
   }
 
-  const links = user.role === 'PATIENT' ? patientLinks : caregiverLinks;
-  const roleLabel = user.role === 'PATIENT' ? 'Patient' : 'Caregiver';
+  // Caregiver routes use their own layout (CaregiverLayout component)
+  // So we just render children without any wrapper
+  if (pathname?.startsWith('/caregiver')) {
+    return <>{children}</>;
+  }
+
+  // Patient routes use this layout
+  const roleLabel = 'Patient';
 
   const handleLogout = () => {
     logout();
@@ -81,7 +81,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       <div className="flex">
         <aside className="w-64 border-r border-slate-200 bg-white px-4 py-6">
           <nav className="space-y-1">
-            {links.map((link) => {
+            {patientLinks.map((link) => {
               const isActive = pathname?.startsWith(link.href);
               return (
                 <Link

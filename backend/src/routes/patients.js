@@ -68,12 +68,16 @@ patientsRouter.get('/:id/dashboard', async (req, res) => {
       return res.status(404).json({ error: 'Patient not found' });
     }
 
-    // Get recent tasks (limit 5)
+    // Get today's tasks (limit 10)
     const tasks = db.collection(Collections.TASKS);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
     const recentTasks = await tasks
-      .find({ patientId })
+      .find({ patientId, dueDate: { $gte: start, $lt: end } })
       .sort({ dueDate: -1 })
-      .limit(5)
+      .limit(10)
       .toArray();
 
     // Get recent memories (limit 10)

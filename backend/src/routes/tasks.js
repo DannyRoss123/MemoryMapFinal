@@ -5,6 +5,7 @@ import { getDb } from '../services/db.js';
 import { TaskPriority } from '../models/schemas.js';
 
 export const tasksRouter = Router();
+const TaskStatus = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
 
 // GET /api/tasks - Get all tasks (with optional filters)
 // Query params: patientId, caregiverId, completed, startDate, endDate
@@ -50,6 +51,25 @@ tasksRouter.get('/', async (req, res) => {
     }
 
     const taskList = await tasks.find(query).sort({ dueDate: -1 }).toArray();
+
+    // Backfill status for tasks that don't have it yet
+    const updates = [];
+    for (const task of taskList) {
+      if (!task.status) {
+        const inferredStatus = task.completed ? 'COMPLETED' : 'PENDING';
+        task.status = inferredStatus;
+        updates.push(
+          tasks.updateOne(
+            { _id: task._id },
+            { $set: { status: inferredStatus, completed: task.completed || inferredStatus === 'COMPLETED' } }
+          )
+        );
+      }
+    }
+    if (updates.length) {
+      await Promise.allSettled(updates);
+    }
+
     res.json(taskList);
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -77,14 +97,14 @@ tasksRouter.get('/:id', async (req, res) => {
 });
 
 // POST /api/tasks - Create a new task
-// Body: { patientId, caregiverId, title, description, dueDate, priority }
+// Body: { patientId?, caregiverId, title, description, dueDate, priority, status }
 tasksRouter.post('/', async (req, res) => {
   try {
-    const { patientId, caregiverId, title, description, dueDate, priority } = req.body;
+    const { patientId, caregiverId, title, description, dueDate, priority, status } = req.body;
 
     // Validation
-    if (!patientId || !caregiverId || !title || !dueDate) {
-      return res.status(400).json({ error: 'Missing required fields: patientId, caregiverId, title, dueDate' });
+    if (!caregiverId || !title || !dueDate) {
+      return res.status(400).json({ error: 'Missing required fields: caregiverId, title, dueDate' });
     }
 
     // Validate priority
@@ -92,16 +112,26 @@ tasksRouter.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid priority value' });
     }
 
+    // Validate status
+    let taskStatus = 'PENDING';
+    if (status) {
+      if (!TaskStatus.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status value' });
+      }
+      taskStatus = status;
+    }
+
     const db = await getDb();
     const tasks = db.collection(Collections.TASKS);
 
     const newTask = {
-      patientId: new ObjectId(patientId),
+      patientId: patientId ? new ObjectId(patientId) : null,
       caregiverId: new ObjectId(caregiverId),
       title: title.trim(),
       description: description?.trim() || '',
       dueDate: new Date(dueDate),
-      completed: false,
+      status: taskStatus,
+      completed: taskStatus === 'COMPLETED',
       priority: priority || TaskPriority.MEDIUM,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -127,10 +157,10 @@ tasksRouter.post('/', async (req, res) => {
 });
 
 // PATCH /api/tasks/:id - Update a task
-// Body: { title, description, dueDate, priority, completed }
+// Body: { title, description, dueDate, priority, completed, status }
 tasksRouter.patch('/:id', async (req, res) => {
   try {
-    const { title, description, dueDate, priority, completed } = req.body;
+    const { title, description, dueDate, priority, completed, status } = req.body;
 
     const db = await getDb();
     const tasks = db.collection(Collections.TASKS);
@@ -146,12 +176,26 @@ tasksRouter.patch('/:id', async (req, res) => {
       }
       updateFields.priority = priority;
     }
+    if (status !== undefined) {
+      if (!TaskStatus.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status value' });
+      }
+      updateFields.status = status;
+      updateFields.completed = status === 'COMPLETED';
+      updateFields.completedAt = status === 'COMPLETED' ? new Date() : null;
+    }
     if (completed !== undefined) {
       updateFields.completed = completed;
       if (completed) {
         updateFields.completedAt = new Date();
       } else {
         updateFields.completedAt = null;
+      }
+      // If completed explicitly set, align status too
+      if (completed && updateFields.status === undefined) {
+        updateFields.status = 'COMPLETED';
+      } else if (!completed && updateFields.status === undefined) {
+        updateFields.status = 'PENDING';
       }
     }
 
@@ -161,11 +205,11 @@ tasksRouter.patch('/:id', async (req, res) => {
       { returnDocument: 'after' }
     );
 
-    if (!result) {
+    if (!result?.value) {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    res.json(result);
+    res.json(result.value);
   } catch (error) {
     console.error('Error updating task:', error);
     res.status(500).json({ error: 'Failed to update task' });

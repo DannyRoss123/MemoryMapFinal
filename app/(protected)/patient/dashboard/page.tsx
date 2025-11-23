@@ -1,79 +1,58 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useUser } from '@/app/context/UserContext';
+import { patientApi, type Memory, type Task, type JournalEntry } from '@/lib/api';
 
 export default function PatientDashboardPage() {
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showAddMemoryModal, setShowAddMemoryModal] = useState(false);
   const [showAllMemoriesModal, setShowAllMemoriesModal] = useState(false);
-  const [selectedMemory, setSelectedMemory] = useState<number | null>(null);
+  const [selectedMemory, setSelectedMemory] = useState<string | null>(null);
   const [showNewJournalModal, setShowNewJournalModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [tasks, setTasks] = useState([
-    { id: 1, text: 'Take morning medication', completed: false },
-    { id: 2, text: 'Go on morning walk', completed: true },
-    { id: 3, text: 'Call your family', completed: false },
-    { id: 4, text: 'Drink water (8 glasses)', completed: false },
-  ]);
 
-  const [memories] = useState([
-    {
-      id: 1,
-      date: '5 days ago, 2:15 PM',
-      image: '/older person memory.png',
-      summary: 'Had a wonderful video call with my grandchildren. They showed me their drawings and school projects.',
-    },
-    {
-      id: 2,
-      date: '4 days ago, 10:30 AM',
-      image: '/older person memory.png',
-      summary: 'Enjoyed a beautiful morning walk in the garden. The flowers were blooming and the weather was perfect.',
-    },
-    {
-      id: 3,
-      date: '3 days ago, 1:00 PM',
-      image: '/older person memory.png',
-      summary: 'Baked cookies with my grandson. The kitchen smelled amazing and we had such a great time together.',
-    },
-    {
-      id: 4,
-      date: '2 days ago, 4:30 PM',
-      image: '/older person memory.png',
-      summary: 'Read a wonderful book in the afternoon sun. Felt peaceful and content.',
-    },
-    {
-      id: 5,
-      date: 'Yesterday, 3:00 PM',
-      image: '/older person memory.png',
-      summary: 'Had a quiet afternoon listening to my favorite music. Felt relaxed and connected after a call with family.',
-    },
-  ]);
+  // Backend data states
+  const [isLoading, setIsLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
 
-  const [journalEntries] = useState([
-    {
-      id: 1,
-      title: 'A Peaceful Afternoon',
-      content: 'Had a quiet afternoon listening to my favorite music. Felt relaxed and connected after a call with family. The sun was shining through the window and it reminded me of summers in the countryside.',
-      date: 'Today',
-      timestamp: 'Just now',
-    },
-    {
-      id: 2,
-      title: 'Morning Walk',
-      content: 'Enjoyed a beautiful morning walk in the garden. The flowers were blooming and the weather was perfect. Saw a blue jay and it made me smile.',
-      date: 'Yesterday',
-      timestamp: '1 day ago',
-    },
-    {
-      id: 3,
-      title: 'Video Call with Grandchildren',
-      content: 'Had a wonderful video call with my grandchildren. They showed me their drawings and school projects. Emma drew a picture of our house and Michael showed me his science project.',
-      date: '2 days ago',
-      timestamp: '2 days ago',
-    },
-  ]);
+  // Form states for new entries
+  const [newJournalTitle, setNewJournalTitle] = useState('');
+  const [newJournalContent, setNewJournalContent] = useState('');
+  const [newMemoryDescription, setNewMemoryDescription] = useState('');
+  const [newMemoryDate, setNewMemoryDate] = useState('');
+  const [newMemoryFile, setNewMemoryFile] = useState<File | null>(null);
+
+  // Load dashboard data from backend
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      if (!user?.userId) return;
+
+      try {
+        setIsLoading(true);
+        const [tasksData, memoriesData, journalData] = await Promise.all([
+          patientApi.getTasks(user.userId),
+          patientApi.getMemories(user.userId),
+          patientApi.getJournalEntries(user.userId),
+        ]);
+
+        setTasks(tasksData);
+        setMemories(memoriesData);
+        setJournalEntries(journalData);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [user?.userId]);
 
   const careTeam = [
     {
@@ -130,20 +109,92 @@ export default function PatientDashboardPage() {
     },
   ];
 
-  const toggleTask = (id: number) => {
-    setTasks(tasks.map(task =>
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
+  const toggleTask = async (id: string) => {
+    if (!user?.userId) return;
+
+    const task = tasks.find(t => t._id === id);
+    if (!task) return;
+
+    try {
+      await patientApi.updateTask(user.userId, id, { completed: !task.completed });
+      // Update local state optimistically
+      setTasks(tasks.map(t =>
+        t._id === id ? { ...t, completed: !t.completed } : t
+      ));
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    }
   };
 
-  const handleAddMemory = () => {
-    // Handle memory submission (mock for now)
-    setShowAddMemoryModal(false);
+  const handleAddMemory = async () => {
+    if (!user?.userId || !newMemoryDescription) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('description', newMemoryDescription);
+      if (newMemoryDate) {
+        formData.append('date', newMemoryDate);
+      }
+      if (newMemoryFile) {
+        formData.append('image', newMemoryFile);
+      }
+
+      await patientApi.createMemory(user.userId, formData);
+
+      // Reload memories
+      const memoriesData = await patientApi.getMemories(user.userId);
+      setMemories(memoriesData);
+
+      // Reset form and close modal
+      setNewMemoryDescription('');
+      setNewMemoryDate('');
+      setNewMemoryFile(null);
+      setShowAddMemoryModal(false);
+    } catch (error) {
+      console.error('Failed to add memory:', error);
+    }
   };
 
-  const handleAddJournalEntry = () => {
-    // Handle journal entry submission (mock for now)
-    setShowNewJournalModal(false);
+  const handleAddJournalEntry = async () => {
+    if (!user?.userId || !newJournalTitle || !newJournalContent) return;
+
+    try {
+      await patientApi.createJournalEntry(user.userId, {
+        title: newJournalTitle,
+        content: newJournalContent,
+      });
+
+      // Reload journal entries
+      const journalData = await patientApi.getJournalEntries(user.userId);
+      setJournalEntries(journalData);
+
+      // Reset form and close modal
+      setNewJournalTitle('');
+      setNewJournalContent('');
+      setShowNewJournalModal(false);
+    } catch (error) {
+      console.error('Failed to add journal entry:', error);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setNewMemoryFile(e.target.files[0]);
+    }
+  };
+
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const toggleRecording = () => {
@@ -224,7 +275,7 @@ export default function PatientDashboardPage() {
 
             {/* Right: User Menu */}
             <div className="flex items-center gap-6">
-              <span className="text-sm text-gray-600">Hi, Jennifer</span>
+              <span className="text-sm text-gray-600">Hi, {user?.name || 'Guest'}</span>
               <Link
                 href="/login"
                 className="text-sm text-[#1e40af] hover:text-[#1e3a8a] font-medium"
@@ -277,21 +328,27 @@ export default function PatientDashboardPage() {
 
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Today&apos;s Tasks</h3>
-                    <div className="space-y-3">
-                      {tasks.map(task => (
-                        <label key={task.id} className="flex items-center gap-3 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            className="w-5 h-5 rounded border-gray-300 text-[#1e40af] focus:ring-[#1e40af]"
-                            checked={task.completed}
-                            onChange={() => toggleTask(task.id)}
-                          />
-                          <span className={`text-base text-gray-700 ${task.completed ? 'line-through opacity-60' : 'group-hover:text-gray-900'}`}>
-                            {task.text}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+                    {isLoading ? (
+                      <p className="text-sm text-gray-500">Loading tasks...</p>
+                    ) : tasks.length === 0 ? (
+                      <p className="text-sm text-gray-500">No tasks yet. Add some to get started!</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {tasks.map(task => (
+                          <label key={task._id} className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              className="w-5 h-5 rounded border-gray-300 text-[#1e40af] focus:ring-[#1e40af]"
+                              checked={task.completed}
+                              onChange={() => toggleTask(task._id)}
+                            />
+                            <span className={`text-base text-gray-700 ${task.completed ? 'line-through opacity-60' : 'group-hover:text-gray-900'}`}>
+                              {task.title}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -355,43 +412,57 @@ export default function PatientDashboardPage() {
 
               {/* Memory items - positioned along the curve */}
               <div className="relative" style={{ zIndex: 1 }}>
-                {memories.slice().reverse().map((memory, index) => {
-                  // Positions along the timeline - adjusted to prevent overlap
-                  // Most recent (Yesterday) on left, oldest (5 days ago) on right
-                  const positions = [
-                    { left: '3%', top: '20px' },      // Memory 5 (Yesterday) - left, top
-                    { left: '23%', top: '170px' },    // Memory 4 (2 days ago) - left-center, bottom
-                    { left: '48%', top: '20px' },     // Memory 3 (3 days ago) - center, top
-                    { left: '73%', top: '170px' },    // Memory 2 (4 days ago) - right-center, bottom
-                    { right: '3%', top: '20px' },     // Memory 1 (5 days ago) - far right, top
-                  ];
+                {isLoading ? (
+                  <div className="text-center py-20">
+                    <p className="text-gray-500">Loading memories...</p>
+                  </div>
+                ) : memories.length === 0 ? (
+                  <div className="text-center py-20">
+                    <p className="text-gray-500">No memories yet. Add your first memory!</p>
+                  </div>
+                ) : (
+                  memories.slice().reverse().map((memory, index) => {
+                    // Positions along the timeline - adjusted to prevent overlap
+                    // Most recent (Yesterday) on left, oldest (5 days ago) on right
+                    const positions = [
+                      { left: '3%', top: '20px' },      // Memory 5 (Yesterday) - left, top
+                      { left: '23%', top: '170px' },    // Memory 4 (2 days ago) - left-center, bottom
+                      { left: '48%', top: '20px' },     // Memory 3 (3 days ago) - center, top
+                      { left: '73%', top: '170px' },    // Memory 2 (4 days ago) - right-center, bottom
+                      { right: '3%', top: '20px' },     // Memory 1 (5 days ago) - far right, top
+                    ];
 
-                  const isBottom = index % 2 === 1;
-                  const position = positions[index];
+                    const isBottom = index % 2 === 1;
+                    const position = positions[index % positions.length];
 
-                  return (
-                    <div
-                      key={memory.id}
-                      className="absolute"
-                      style={position}
-                    >
-                      <div className={`flex ${isBottom ? 'flex-col' : 'flex-col-reverse'} items-center gap-3`}>
-                        {/* Circle with placeholder image */}
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border-4 border-white shadow-md flex-shrink-0 flex items-center justify-center overflow-hidden">
-                          <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
+                    return (
+                      <div
+                        key={memory._id}
+                        className="absolute"
+                        style={position}
+                      >
+                        <div className={`flex ${isBottom ? 'flex-col' : 'flex-col-reverse'} items-center gap-3`}>
+                          {/* Circle with placeholder image */}
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border-4 border-white shadow-md flex-shrink-0 flex items-center justify-center overflow-hidden">
+                            {memory.imageUrl ? (
+                              <Image src={memory.imageUrl} alt="Memory" fill className="object-cover" />
+                            ) : (
+                              <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </div>
 
-                        {/* Memory content */}
-                        <div className="bg-white rounded-lg shadow-md p-4 w-52 hover:shadow-lg transition">
-                          <p className="text-xs text-[#1e40af] font-semibold mb-2">{memory.date}</p>
-                          <p className="text-sm text-gray-700 line-clamp-2">{memory.summary}</p>
+                          {/* Memory content */}
+                          <div className="bg-white rounded-lg shadow-md p-4 w-52 hover:shadow-lg transition">
+                            <p className="text-xs text-[#1e40af] font-semibold mb-2">{formatDate(memory.date)}</p>
+                            <p className="text-sm text-gray-700 line-clamp-2">{memory.description}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -431,6 +502,8 @@ export default function PatientDashboardPage() {
                     <input
                       type="text"
                       placeholder="Give your entry a title..."
+                      value={newJournalTitle}
+                      onChange={(e) => setNewJournalTitle(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                     />
                   </div>
@@ -442,6 +515,8 @@ export default function PatientDashboardPage() {
                       <textarea
                         rows={8}
                         placeholder="Write about your day, feelings, or anything on your mind..."
+                        value={newJournalContent}
+                        onChange={(e) => setNewJournalContent(e.target.value)}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent resize-none pr-14"
                       />
                       {/* Microphone Button */}
@@ -487,20 +562,26 @@ export default function PatientDashboardPage() {
               <div className="space-y-3">
                 <h3 className="text-xl font-semibold text-gray-900 mb-3">Recent Entries</h3>
 
-                {journalEntries.map((entry, index) => (
-                  <div
-                    key={entry.id}
-                    className={`${
-                      index === 0 ? 'border-l-4 border-[#1e40af]' : 'border-l-4 border-gray-300'
-                    } pl-4 py-3 bg-white rounded-r-lg shadow-sm hover:shadow-md transition cursor-pointer`}
-                  >
-                    <h4 className="font-semibold text-gray-900 text-base mb-1">{entry.title}</h4>
-                    <span className="text-xs text-gray-500">{entry.date} • {entry.timestamp}</span>
-                    <p className="text-sm text-gray-700 leading-relaxed mt-2 line-clamp-3">
-                      {entry.content}
-                    </p>
-                  </div>
-                ))}
+                {isLoading ? (
+                  <p className="text-sm text-gray-500">Loading entries...</p>
+                ) : journalEntries.length === 0 ? (
+                  <p className="text-sm text-gray-500">No journal entries yet. Write your first one!</p>
+                ) : (
+                  journalEntries.map((entry, index) => (
+                    <div
+                      key={entry._id}
+                      className={`${
+                        index === 0 ? 'border-l-4 border-[#1e40af]' : 'border-l-4 border-gray-300'
+                      } pl-4 py-3 bg-white rounded-r-lg shadow-sm hover:shadow-md transition cursor-pointer`}
+                    >
+                      <h4 className="font-semibold text-gray-900 text-base mb-1">{entry.title}</h4>
+                      <span className="text-xs text-gray-500">{formatDate(entry.createdAt)}</span>
+                      <p className="text-sm text-gray-700 leading-relaxed mt-2 line-clamp-3">
+                        {entry.content}
+                      </p>
+                    </div>
+                  ))
+                )}
 
                 <button
                   onClick={() => setShowNewJournalModal(true)}
@@ -642,25 +723,33 @@ export default function PatientDashboardPage() {
 
               {/* Memory Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {memories.slice().reverse().map((memory) => (
-                  <button
-                    key={memory.id}
-                    onClick={() => setSelectedMemory(memory.id)}
-                    className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden hover:border-[#1e40af] hover:shadow-lg transition group text-left"
-                  >
-                    {/* Image */}
-                    <div className="relative h-48 bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                      <svg className="w-16 h-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    {/* Content */}
-                    <div className="p-4">
-                      <p className="text-sm text-[#1e40af] font-semibold mb-2">{memory.date}</p>
-                      <p className="text-sm text-gray-700 line-clamp-3">{memory.summary}</p>
-                    </div>
-                  </button>
-                ))}
+                {memories.length === 0 ? (
+                  <p className="text-gray-500 col-span-3">No memories yet. Add your first memory!</p>
+                ) : (
+                  memories.slice().reverse().map((memory) => (
+                    <button
+                      key={memory._id}
+                      onClick={() => setSelectedMemory(memory._id)}
+                      className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden hover:border-[#1e40af] hover:shadow-lg transition group text-left"
+                    >
+                      {/* Image */}
+                      <div className="relative h-48 bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                        {memory.imageUrl ? (
+                          <Image src={memory.imageUrl} alt="Memory" fill className="object-cover" />
+                        ) : (
+                          <svg className="w-16 h-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className="p-4">
+                        <p className="text-sm text-[#1e40af] font-semibold mb-2">{formatDate(memory.date)}</p>
+                        <p className="text-sm text-gray-700 line-clamp-3">{memory.description}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -698,28 +787,32 @@ export default function PatientDashboardPage() {
 
               {/* Memory Details */}
               {(() => {
-                const memory = memories.find(m => m.id === selectedMemory);
+                const memory = memories.find(m => m._id === selectedMemory);
                 if (!memory) return null;
 
                 return (
                   <div className="space-y-6">
                     {/* Image */}
-                    <div className="relative h-96 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
-                      <svg className="w-24 h-24 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                    <div className="relative h-96 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center overflow-hidden">
+                      {memory.imageUrl ? (
+                        <Image src={memory.imageUrl} alt="Memory" fill className="object-cover" />
+                      ) : (
+                        <svg className="w-24 h-24 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      )}
                     </div>
 
                     {/* Date */}
                     <div>
                       <p className="text-sm font-semibold text-gray-500 mb-1">DATE</p>
-                      <p className="text-lg text-[#1e40af] font-semibold">{memory.date}</p>
+                      <p className="text-lg text-[#1e40af] font-semibold">{formatDate(memory.date)}</p>
                     </div>
 
                     {/* Description */}
                     <div>
                       <p className="text-sm font-semibold text-gray-500 mb-2">DESCRIPTION</p>
-                      <p className="text-base text-gray-700 leading-relaxed">{memory.summary}</p>
+                      <p className="text-base text-gray-700 leading-relaxed">{memory.description}</p>
                     </div>
 
                     {/* Actions */}
@@ -762,12 +855,24 @@ export default function PatientDashboardPage() {
                 {/* Picture Upload */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Photo</label>
-                  <button className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 hover:border-[#1e40af] transition flex flex-col items-center gap-2 group">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="memory-file-upload"
+                  />
+                  <label
+                    htmlFor="memory-file-upload"
+                    className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 hover:border-[#1e40af] transition flex flex-col items-center gap-2 group cursor-pointer"
+                  >
                     <svg className="w-12 h-12 text-gray-400 group-hover:text-[#1e40af] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    <span className="text-sm text-gray-500 group-hover:text-[#1e40af] transition">Click to upload photo</span>
-                  </button>
+                    <span className="text-sm text-gray-500 group-hover:text-[#1e40af] transition">
+                      {newMemoryFile ? newMemoryFile.name : 'Click to upload photo'}
+                    </span>
+                  </label>
                 </div>
 
                 {/* Date & Time */}
@@ -775,6 +880,8 @@ export default function PatientDashboardPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">When did this happen?</label>
                   <input
                     type="datetime-local"
+                    value={newMemoryDate}
+                    onChange={(e) => setNewMemoryDate(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   />
                 </div>
@@ -785,6 +892,8 @@ export default function PatientDashboardPage() {
                   <textarea
                     rows={6}
                     placeholder="Describe your memory..."
+                    value={newMemoryDescription}
+                    onChange={(e) => setNewMemoryDescription(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent resize-none"
                   />
                 </div>
@@ -863,6 +972,8 @@ export default function PatientDashboardPage() {
                   <input
                     type="text"
                     placeholder="Give your entry a title..."
+                    value={newJournalTitle}
+                    onChange={(e) => setNewJournalTitle(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   />
                 </div>
@@ -874,6 +985,8 @@ export default function PatientDashboardPage() {
                     <textarea
                       rows={10}
                       placeholder="Write about your day, feelings, or anything on your mind..."
+                      value={newJournalContent}
+                      onChange={(e) => setNewJournalContent(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent resize-none pr-14"
                     />
                     {/* Microphone Button */}

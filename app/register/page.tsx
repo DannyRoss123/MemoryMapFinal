@@ -3,20 +3,58 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/app/context/UserContext';
+import { authApi } from '@/lib/api';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login } = useUser();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [patientType, setPatientType] = useState('patient');
+  const [patientType, setPatientType] = useState<'PATIENT' | 'CAREGIVER'>('PATIENT');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock registration - just navigate to patient dashboard
-    router.push('/patient/dashboard');
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      const response = await authApi.register({
+        email,
+        password,
+        name: fullName,
+        role: patientType,
+      });
+
+      // Store user in context
+      login({
+        userId: response.user._id,
+        name: response.user.name,
+        role: response.user.role,
+        location: response.user.location || '',
+        caregiverId: response.user.caregiverId,
+        caregiverName: response.user.caregiverName,
+      });
+
+      // Navigate based on role
+      if (response.user.role === 'PATIENT') {
+        router.push('/patient/welcome');
+      } else {
+        router.push('/caregiver/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -29,6 +67,13 @@ export default function RegisterPage() {
             <p className="text-xl text-gray-700 mt-4">Create an account</p>
             <p className="text-sm text-gray-600 mt-1">Join Memory Map today.</p>
           </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Registration Form */}
           <form onSubmit={handleRegister} className="space-y-4">
@@ -116,21 +161,21 @@ export default function RegisterPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Account Type*</label>
               <select
                 value={patientType}
-                onChange={(e) => setPatientType(e.target.value)}
+                onChange={(e) => setPatientType(e.target.value as 'PATIENT' | 'CAREGIVER')}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#5b6ef5] focus:border-transparent"
                 required
               >
-                <option value="patient">Patient</option>
-                <option value="caregiver">Caregiver</option>
-                <option value="family">Family Member</option>
+                <option value="PATIENT">Patient</option>
+                <option value="CAREGIVER">Caregiver</option>
               </select>
             </div>
 
             <button
               type="submit"
-              className="w-full bg-[#5b6ef5] hover:bg-[#4a5de4] text-white font-semibold py-3 rounded-lg transition shadow-md"
+              disabled={isLoading}
+              className="w-full bg-[#5b6ef5] hover:bg-[#4a5de4] text-white font-semibold py-3 rounded-lg transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Account
+              {isLoading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 

@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/app/context/UserContext';
+import { patientApi } from '@/lib/api';
 
 export default function PatientWelcomePage() {
   const router = useRouter();
+  const { user } = useUser();
   const [step, setStep] = useState(1); // 1: Welcome, 2: Mood, 3: Done
-  const [userName] = useState('Jennifer'); // Mock user name
   const [selectedMood, setSelectedMood] = useState('');
   const [fadeOut, setFadeOut] = useState(false);
   const [displayedText, setDisplayedText] = useState('');
-  const fullText = `Welcome, ${userName}`;
+  const [isSaving, setIsSaving] = useState(false);
+  const fullText = `Welcome, ${user?.name || 'Guest'}`;
 
   const moods = [
     { value: 'happy', label: 'Happy', emoji: '😊' },
@@ -52,14 +55,31 @@ export default function PatientWelcomePage() {
     }
   }, [step, displayedText, fullText]);
 
-  const handleMoodSubmit = () => {
-    if (!selectedMood) return;
+  const handleMoodSubmit = async () => {
+    if (!selectedMood || !user?.userId || isSaving) return;
 
-    // Fade out and navigate to dashboard
-    setFadeOut(true);
-    setTimeout(() => {
-      router.push('/patient/dashboard');
-    }, 500);
+    try {
+      setIsSaving(true);
+
+      // Save mood to backend
+      await patientApi.createMoodEntry(user.userId, {
+        mood: selectedMood,
+      });
+
+      // Fade out and navigate to dashboard
+      setFadeOut(true);
+      setTimeout(() => {
+        router.push('/patient/dashboard');
+      }, 500);
+    } catch (error) {
+      console.error('Failed to save mood:', error);
+      setIsSaving(false);
+      // Still navigate even if mood save fails
+      setFadeOut(true);
+      setTimeout(() => {
+        router.push('/patient/dashboard');
+      }, 500);
+    }
   };
 
   return (
@@ -113,10 +133,10 @@ export default function PatientWelcomePage() {
             </div>
             <button
               onClick={handleMoodSubmit}
-              disabled={!selectedMood}
+              disabled={!selectedMood || isSaving}
               className="mt-8 px-8 py-3 bg-gradient-to-r from-[#5ac2ff] to-[#3f89ff] text-white font-semibold rounded-full shadow-lg hover:shadow-xl hover:brightness-105 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Continue
+              {isSaving ? 'Saving...' : 'Continue'}
             </button>
           </div>
         )}

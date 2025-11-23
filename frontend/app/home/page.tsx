@@ -13,6 +13,7 @@ export default function HomePage() {
   const [tasks, setTasks] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
+  const [recentMemories, setRecentMemories] = useState([]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -59,6 +60,26 @@ export default function HomePage() {
 
     if (user?.userId && user?.role === 'PATIENT') {
       fetchTasks();
+    }
+  }, [user]);
+
+  // Fetch recent memories
+  useEffect(() => {
+    const fetchMemories = async () => {
+      if (!user?.userId) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/memories?patientId=${user.userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setRecentMemories((data || []).slice(0, 3));
+        }
+      } catch (error) {
+        console.error('Error fetching memories:', error);
+      }
+    };
+
+    if (user?.userId && user?.role === 'PATIENT') {
+      fetchMemories();
     }
   }, [user]);
 
@@ -136,9 +157,45 @@ export default function HomePage() {
             {/* Yesterday's Memory */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Memories</h3>
-              <div className="flex items-center justify-center py-8">
-                <p className="text-gray-400 text-center">No recent memories</p>
-              </div>
+              {recentMemories.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <p className="text-gray-400 text-center">No recent memories</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentMemories.map((memory) => (
+                    <div
+                      key={memory._id}
+                      className="flex items-center space-x-4 p-3 rounded-xl border border-gray-100 hover:border-blue-100"
+                    >
+                      <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                        {memory.type === 'VIDEO' ? (
+                          <div className="w-full h-full bg-black flex items-center justify-center text-white text-xs">
+                            Video
+                          </div>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={memory.url?.startsWith('http') ? memory.url : `${API_BASE_URL}${memory.url}`}
+                            alt={memory.title || 'Memory'}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {memory.title || (memory.type === 'VIDEO' ? 'Video memory' : 'Photo memory')}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {memory.createdAt
+                            ? new Date(memory.createdAt).toLocaleDateString()
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Today's Tasks */}

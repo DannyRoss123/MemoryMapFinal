@@ -18,21 +18,15 @@ const caregiverLinks = [
 ];
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, logout, login } = useUser();
+  const { user, isLoading, logout } = useUser();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      // Fallback mock user for UI preview
-      login({
-        userId: 'demo-user',
-        name: 'Jennifer',
-        role: 'PATIENT',
-        location: 'Demo'
-      });
+      router.replace('/login');
     }
-  }, [user, isLoading, login]);
+  }, [user, isLoading, router]);
 
   if (isLoading) {
     return (

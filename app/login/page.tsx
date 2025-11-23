@@ -3,21 +3,48 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useUser } from '../context/UserContext';
+import { authApi } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'patient' | 'caregiver'>('patient');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - navigate based on selected role
-    if (role === 'patient') {
-      router.push('/patient/welcome');
-    } else {
-      router.push('/caregiver/dashboard');
+    setError('');
+    setIsLoading(true);
+
+    try {
+      // Call backend login API
+      const response = await authApi.login({ email, password });
+
+      // Store user in context
+      login({
+        userId: response.user._id,
+        name: response.user.name,
+        role: response.user.role,
+        location: response.user.location || '',
+        caregiverId: response.user.caregiverId,
+        caregiverName: response.user.caregiverName,
+      });
+
+      // Navigate based on role
+      if (response.user.role === 'PATIENT') {
+        router.push('/patient/welcome');
+      } else {
+        router.push('/caregiver/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -91,33 +118,12 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">I am a:</label>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRole('patient')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    role === 'patient'
-                      ? 'bg-[#5b6ef5] text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Patient
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('caregiver')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    role === 'caregiver'
-                      ? 'bg-[#5b6ef5] text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Caregiver
-                </button>
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
               </div>
-            </div>
+            )}
 
             <div className="text-left">
               <Link href="#" className="text-sm text-[#5b6ef5] hover:underline">
@@ -127,9 +133,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="w-full bg-[#5b6ef5] hover:bg-[#4a5de4] text-white font-semibold py-3 rounded-lg transition shadow-md"
+              disabled={isLoading}
+              className="w-full bg-[#5b6ef5] hover:bg-[#4a5de4] text-white font-semibold py-3 rounded-lg transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Continue
+              {isLoading ? 'Signing in...' : 'Continue'}
             </button>
           </form>
 

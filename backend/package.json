@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development node src/server.js",
+    "dev": "cross-env NODE_ENV=development node src/server.js",
     "start": "node src/server.js"
   },
   "dependencies": {
@@ -14,5 +14,8 @@
     "express": "^4.19.2",
     "mongodb": "^6.3.0",
     "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   }
 }

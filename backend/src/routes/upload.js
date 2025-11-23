@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import upload from '../middleware/upload.js';
 
 export const uploadRouter = Router();

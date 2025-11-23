@@ -69,14 +69,14 @@ memoriesRouter.get('/:id', async (req, res) => {
 });
 
 // POST /api/memories - Create a new memory
-// Body: { patientId, caregiverId, type, url, title, description, caption, fileSize, mimeType }
+// Body: { patientId, caregiverId?, type, url, title, description, caption, fileSize, mimeType }
 memoriesRouter.post('/', async (req, res) => {
   try {
     const { patientId, caregiverId, type, url, title, description, caption, fileSize, mimeType } = req.body;
 
     // Validation
-    if (!patientId || !caregiverId || !type || !url) {
-      return res.status(400).json({ error: 'Missing required fields: patientId, caregiverId, type, url' });
+    if (!patientId || !type || !url) {
+      return res.status(400).json({ error: 'Missing required fields: patientId, type, url' });
     }
 
     // Validate type
@@ -89,7 +89,7 @@ memoriesRouter.post('/', async (req, res) => {
 
     const newMemory = {
       patientId: new ObjectId(patientId),
-      caregiverId: new ObjectId(caregiverId),
+      caregiverId: caregiverId ? new ObjectId(caregiverId) : null,
       type,
       url,
       title: title?.trim() || '',

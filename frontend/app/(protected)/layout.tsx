@@ -18,15 +18,21 @@ const caregiverLinks = [
 ];
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, logout } = useUser();
+  const { user, isLoading, logout, login } = useUser();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.replace('/login');
+      // Fallback mock user for UI preview
+      login({
+        userId: 'demo-user',
+        name: 'Jennifer',
+        role: 'PATIENT',
+        location: 'Demo'
+      });
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, login]);
 
   if (isLoading) {
     return (
@@ -45,6 +51,10 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     logout();
     router.replace('/login');
   };
+
+  if (user.role === 'PATIENT') {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">

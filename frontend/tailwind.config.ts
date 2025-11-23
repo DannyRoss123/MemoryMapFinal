@@ -8,15 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      animation: {
-        'fade-in': 'fadeIn 0.6s ease-in-out'
+      fontFamily: {
+        cursive: ['var(--font-pacifico)'],
       },
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' }
-        }
-      }
     }
   },
   plugins: []

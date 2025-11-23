@@ -15,10 +15,10 @@ export default function HomePage() {
       <header className="relative z-10 flex items-center justify-between px-6 md:px-12 py-4">
         <div className="text-xl md:text-2xl font-semibold text-[#0b4e88]">Memory Map</div>
         <div className="flex items-center gap-4 md:gap-6 text-sm md:text-base">
-          <Link href="#about" className="text-[#0b4e88]/80 hover:text-[#0b4e88] transition">
+          <Link href="/about" className="text-[#0b4e88]/80 hover:text-[#0b4e88] transition">
             About
           </Link>
-          <Link href="#contact" className="text-[#0b4e88]/80 hover:text-[#0b4e88] transition">
+          <Link href="/contact" className="text-[#0b4e88]/80 hover:text-[#0b4e88] transition">
             Contact
           </Link>
           <Link

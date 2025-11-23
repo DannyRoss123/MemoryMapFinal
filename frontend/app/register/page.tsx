@@ -19,6 +19,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [location, setLocation] = useState('');
   const [userType, setUserType] = useState<Role>('PATIENT');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,6 +66,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!location.trim()) {
+      setError('Please enter your location.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/register`, {
@@ -77,6 +83,7 @@ export default function RegisterPage() {
           lastName: lastName.trim(),
           email: email.trim().toLowerCase(),
           password,
+          location: location.trim(),
           role: userType
         })
       });
@@ -186,6 +193,23 @@ export default function RegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-2xl border border-white/40 bg-white/90 px-4 py-3 text-base text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
               placeholder="john@example.com"
+              required
+            />
+          </div>
+
+          {/* Location */}
+          <div className="space-y-1">
+            <label htmlFor="location" className="block text-sm font-medium text-white/90">
+              Location
+            </label>
+            <input
+              id="location"
+              name="location"
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full rounded-2xl border border-white/40 bg-white/90 px-4 py-3 text-base text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+              placeholder="New York, NY"
               required
             />
           </div>

@@ -4,36 +4,57 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'patient' | 'caregiver'>('patient');
+  const [patientType, setPatientType] = useState('patient');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - navigate based on selected role
-    if (role === 'patient') {
-      router.push('/patient/welcome');
-    } else {
-      router.push('/caregiver/dashboard');
-    }
+    // Mock registration - just navigate to patient dashboard
+    router.push('/patient/dashboard');
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-[#e8e8e8] px-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-[#e8e8e8] px-4 py-8">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-3xl shadow-xl px-8 py-10 md:px-12 md:py-12">
           {/* Logo/Title */}
           <div className="text-center mb-8">
             <h1 className="text-4xl font-semibold text-[#0b4e88] mb-2">Memory Map</h1>
-            <p className="text-xl text-gray-700 mt-4">Welcome</p>
-            <p className="text-sm text-gray-600 mt-1">Log in to your account.</p>
+            <p className="text-xl text-gray-700 mt-4">Create an account</p>
+            <p className="text-sm text-gray-600 mt-1">Join Memory Map today.</p>
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleLogin} className="space-y-4">
+          {/* Registration Form */}
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <input
+                  type="text"
+                  placeholder="First name*"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#5b6ef5] focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Last name*"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#5b6ef5] focus:border-transparent"
+                  required
+                />
+              </div>
+            </div>
+
             <div>
               <input
                 type="email"
@@ -92,53 +113,33 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">I am a:</label>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRole('patient')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    role === 'patient'
-                      ? 'bg-[#5b6ef5] text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Patient
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('caregiver')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    role === 'caregiver'
-                      ? 'bg-[#5b6ef5] text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Caregiver
-                </button>
-              </div>
-            </div>
-
-            <div className="text-left">
-              <Link href="#" className="text-sm text-[#5b6ef5] hover:underline">
-                Forgot password?
-              </Link>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Account Type*</label>
+              <select
+                value={patientType}
+                onChange={(e) => setPatientType(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#5b6ef5] focus:border-transparent"
+                required
+              >
+                <option value="patient">Patient</option>
+                <option value="caregiver">Caregiver</option>
+                <option value="family">Family Member</option>
+              </select>
             </div>
 
             <button
               type="submit"
               className="w-full bg-[#5b6ef5] hover:bg-[#4a5de4] text-white font-semibold py-3 rounded-lg transition shadow-md"
             >
-              Continue
+              Create Account
             </button>
           </form>
 
-          {/* Register Link */}
+          {/* Login Link */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link href="/register" className="text-[#5b6ef5] hover:underline font-medium">
-                Register here
+              Already have an account?{' '}
+              <Link href="/login" className="text-[#5b6ef5] hover:underline font-medium">
+                Log in here
               </Link>
             </p>
           </div>

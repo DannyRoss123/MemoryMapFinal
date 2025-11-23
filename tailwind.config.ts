@@ -7,7 +7,11 @@ const config: Config = {
     './pages/**/*.{js,ts,jsx,tsx}'
   ],
   theme: {
-    extend: {}
+    extend: {
+      fontFamily: {
+        cursive: ['var(--font-pacifico)'],
+      },
+    }
   },
   plugins: []
 };

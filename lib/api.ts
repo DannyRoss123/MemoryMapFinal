@@ -49,9 +49,14 @@ export interface LoginCredentials {
 export interface RegisterData {
   email: string;
   password: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   role: 'PATIENT' | 'CAREGIVER';
-  location?: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  userId: string;
 }
 
 export interface User {
@@ -77,7 +82,7 @@ export const authApi = {
     }),
 
   register: (data: RegisterData) =>
-    apiCall<LoginResponse>('/api/users', {
+    apiCall<RegisterResponse>('/api/register', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

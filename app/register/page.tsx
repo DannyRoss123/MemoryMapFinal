@@ -24,27 +24,35 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const fullName = `${firstName} ${lastName}`.trim();
-
-      const response = await authApi.register({
+      // Register the user
+      const registerResponse = await authApi.register({
         email,
         password,
-        name: fullName,
+        firstName,
+        lastName,
         role: patientType,
+      });
+
+      console.log('Registration successful:', registerResponse);
+
+      // Now login with the same credentials
+      const loginResponse = await authApi.login({
+        email,
+        password,
       });
 
       // Store user in context
       login({
-        userId: response.user._id,
-        name: response.user.name,
-        role: response.user.role,
-        location: response.user.location || '',
-        caregiverId: response.user.caregiverId,
-        caregiverName: response.user.caregiverName,
+        userId: loginResponse.user._id,
+        name: loginResponse.user.name,
+        role: loginResponse.user.role,
+        location: loginResponse.user.location || '',
+        caregiverId: loginResponse.user.caregiverId,
+        caregiverName: loginResponse.user.caregiverName,
       });
 
       // Navigate based on role
-      if (response.user.role === 'PATIENT') {
+      if (loginResponse.user.role === 'PATIENT') {
         router.push('/patient/welcome');
       } else {
         router.push('/caregiver/dashboard');

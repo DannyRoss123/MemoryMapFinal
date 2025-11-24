@@ -1,8 +1,9 @@
 import { Router } from 'express';
+import bcrypt from 'bcrypt';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../services/db.js';
 
-const roles = ['PATIENT', 'CAREGIVER'];
+const roles = ['PATIENT', 'CAREGIVER', 'ADMIN'];
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -15,12 +16,51 @@ function buildCaseInsensitiveQuery(name) {
 export const loginRouter = Router();
 
 loginRouter.post('/', async (req, res) => {
+  // Check if this is email/password login (new system) or name-based login (old system)
+  const email = req.body?.email?.trim();
+  const password = req.body?.password;
   const name = req.body?.name?.trim();
   const role = req.body?.role;
   const location = req.body?.location?.trim();
   const caregiverName = req.body?.caregiverName?.trim();
 
-  if (!name || !role || !roles.includes(role) || !location) {
+  // Email/password login (new system for all roles including ADMIN)
+  if (email && password) {
+    try {
+      const db = await getDb();
+      const users = db.collection('users');
+
+      // Find user by email
+      const user = await users.findOne({ email: email.toLowerCase() });
+
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      // Return user data
+      return res.json({
+        userId: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        location: user.location,
+        caregiverId: user.caregiverId ? user.caregiverId.toString() : undefined,
+        caregiverName: user.caregiverName
+      });
+    } catch (error) {
+      console.error('Email/password login error:', error);
+      return res.status(500).json({ error: 'Unable to log in' });
+    }
+  }
+
+  // Name-based login (old system for PATIENT and CAREGIVER)
+  if (!name || !role || !['PATIENT', 'CAREGIVER'].includes(role) || !location) {
     return res.status(400).json({ error: 'Invalid name, role, or location' });
   }
 

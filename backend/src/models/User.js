@@ -23,7 +23,7 @@ export const UserRoles = {
  *   location: String (required),
  *   caregiverId: ObjectId (for patients - reference to caregiver),
  *   caregiverName: String (denormalized for quick access),
- *   profileImage: String (URL or path),
+ *   profilePicture: String (URL or path),
  *   createdAt: Date,
  *   updatedAt: Date
  * }
@@ -84,7 +84,7 @@ class UserModel {
       location: userData.location.trim(),
       caregiverId: userData.caregiverId || null,
       caregiverName: userData.caregiverName || null,
-      profileImage: userData.profileImage || null,
+      profilePicture: userData.profilePicture || null,
       createdAt: now,
       updatedAt: now
     };

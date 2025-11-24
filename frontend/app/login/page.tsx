@@ -26,7 +26,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      router.replace('/home');
+      if (user.role === 'CAREGIVER') {
+        router.replace('/caregiver/dashboard');
+      } else {
+        router.replace('/home');
+      }
     }
   }, [user, isLoading, router]);
 
@@ -70,9 +74,11 @@ export default function LoginPage() {
       // Small delay to ensure user context is updated
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Redirect patients to mood check, caregivers directly to home
+      // Redirect based on role
       if (userData.role === 'PATIENT') {
         router.push('/mood-check');
+      } else if (userData.role === 'CAREGIVER') {
+        router.push('/caregiver/dashboard');
       } else {
         router.push('/home');
       }

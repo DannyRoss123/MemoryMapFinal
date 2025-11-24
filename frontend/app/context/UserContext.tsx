@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-export type Role = 'PATIENT' | 'CAREGIVER';
+export type Role = 'PATIENT' | 'CAREGIVER' | 'ADMIN';
 
 export type User = {
   userId: string;

@@ -29,6 +29,8 @@ import { patientsRouter } from './routes/patients.js';
 import { caregiversRouter } from './routes/caregivers.js';
 import { uploadRouter } from './routes/upload.js';
 import { contactsRouter } from './routes/contacts.js';
+import { assignmentsRouter } from './routes/assignments.js';
+import { usersRouter } from './routes/users.js';
 
 const app = express();
 const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map((origin) => origin.trim()).filter(Boolean);
@@ -53,6 +55,8 @@ app.use('/api/patients', patientsRouter);
 app.use('/api/caregivers', caregiversRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/contacts', contactsRouter);
+app.use('/api/assignments', assignmentsRouter);
+app.use('/api/users', usersRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -125,6 +129,12 @@ app.get('/api', (_req, res) => {
         'POST /api/contacts': 'Create contact',
         'PATCH /api/contacts/:id': 'Update contact',
         'DELETE /api/contacts/:id': 'Delete contact'
+      },
+      assignments: {
+        'POST /api/assignments/assign': 'Assign a patient to a caregiver',
+        'POST /api/assignments/unassign': 'Unassign a patient from their caregiver',
+        'GET /api/assignments/patient/:patientId/caregiver': 'Get caregiver assigned to a patient',
+        'GET /api/assignments/caregiver/:caregiverId/patients': 'Get all patients assigned to a caregiver'
       },
       upload: {
         'POST /api/upload': 'Upload single file',
